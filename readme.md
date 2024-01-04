@@ -8,6 +8,7 @@ Requirements:
 * Python >= 3.10
 * numpy >= ?
 * h5py >= ?
+* matplotlib >= ?
 * pyctem == 4.3
 
 License
