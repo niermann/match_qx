@@ -1,0 +1,7 @@
+__pycache__/
+.idea/
+.pytest_cache/
+*.tdf
+
+# Currently the data files required for testing are not publically available, so we omit the tests
+tests/
