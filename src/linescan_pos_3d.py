@@ -12,7 +12,8 @@ from pyctem.proc import line_scan
 from pyctem.utils import decode_json
 from pyctem import TemMeasurementMetaData
 
-EPILOG = """
+
+COPYRIGHT = """
 Copyright (c) 2024 Tore Niermann
 
 This program comes with ABSOLUTELY NO WARRANTY;
@@ -22,6 +23,50 @@ it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version. See file 'COPYING' for details.
 """
+
+EXAMPLE_PARAMETER_FILE = """{
+    // 4D-STEM data file
+    // Supported file types are:
+    //  *.mib       Original Merlin Data file, requires valid image in 'image_file' or 'image_area_size' parameter.
+    //  *.tdf       TEM Data File (PyCTEM file format)
+    //  *.hdf5/h5   HDF5 File (if more than a single dataset is within the file, parameter 'stem4d_dataset' is required.
+    "stem4d_file": "raw_data_aluminum.hdf5",
+    
+    // Name of 4D-STEM dataset within file 'stem4d_file' (optional).
+    // Can be omitted if only a single dataset is present in the file. Otherwise, defaults to 'merlin.data'.
+    //"stem4d_dataset": "merlin.data",
+    
+    // Image file (for additional metadata and interactive mode; optional)
+    // A correlative signal to 4D-STEM measurement (e.g. HAADF signal)
+    // Supported file types are:
+    //  *.tiff      TIFF data (tested with JEOL scan data files)
+    //  *.tdf       TEM Data File (PyCTEM file format), requires parameter 'image_dataset' to identify dataset.
+    //"image_file": "some_image.tiff",
+     
+    // Name of image dataset within file 'image_file' (mandatory for some file types).
+    //"image_dataset": "some_image_name",
+    
+    // Optional sampling (nm/px) for scan dimensions. Otherwise, taken from 4D-STEM or image metadata. 
+    //"image_scale": 0.12345,
+
+    // Optional sampling (nm^-1 / px) for diffraction dimensions. Otherwise, taken from 4D-STEM or image metadata. 
+    //"diff_scale": 0.54321,
+    
+    // [x, y] Size of scan dimensions in pixels. Ignored if non MIB-file 4D-STEM data, otherwise mandatory.
+    //"image_area_size": [256, 256],
+     
+    // [x, y] Position of starting point of profile (in pixels)
+    //"pos0": [64, 128], 
+
+    // [x, y] Position of ending point of profile (in pixels)
+    //"pos1": [192, 128],
+    
+    // Width of profile (in pixels)
+    //"posw": 10.0,
+    
+    // Size of profile bin (in pixels)
+    //"binsize": 1.0,
+}"""
 
 LINESCAN3D_VERSION = 4.0
 
@@ -143,12 +188,8 @@ def get_diff_axes(param, voltage, detect_angle):
 
 def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result=False, image_method=None, lazy=True,
          dryrun=False):
-    work_dir = Path(param.get("work_dir", '.'))
-    merlin_path = work_dir / param["stem4d_file"]
-
+    merlin_path = param["stem4d_file"]
     image_path = param.get("image_file")
-    if image_path:
-        image_path = work_dir / image_path
 
     metadata = CoreMetaData()
     data = None
@@ -354,8 +395,9 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
 if __name__ == '__main__':
     import argparse
 
-
-    parser = argparse.ArgumentParser(description="Create 3D linescan from 4D-STEM position space", epilog=EPILOG)
+    parser = argparse.ArgumentParser(description="Create 3D linescan from 4D-STEM position space",
+                                     epilog=COPYRIGHT + "\n\nExample parameter file:\n" + EXAMPLE_PARAMETER_FILE,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('paramfile')
     parser.add_argument('-s', '--show4d', action='store_true', default=False, help="Show 4D dataset")
     parser.add_argument('-l', '--linescan', action='store_true', default=False, help="Show linescan interactively")
