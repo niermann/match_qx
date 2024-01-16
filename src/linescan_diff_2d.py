@@ -154,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--result', action='store_true', default=False, help="Show result")
     parser.add_argument('-c', '--cmap', type=str, default="gray", help="Colormap")
     parser.add_argument('--linear', action='store_true', default=False,
-                        help="Show data linear instead of logarithmetically")
+                        help="Show data linear instead of logarithmically")
     parser.add_argument('-n', '--dry-run', dest="dryrun", action='store_true', default=False, help="Do not save result")
     args = parser.parse_args()
 
