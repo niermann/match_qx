@@ -1,0 +1,9 @@
+{
+    "stem4d_file": "raw_data_dislocation_B.hdf5",
+    "image_scale": 0.78125,
+    "diff_scale": 0.074677,
+    "pos0": [86.0, 121.7],
+    "pos1": [35.2, 51.5],
+    "posw": 13.0,
+    "pos_binsize": 1
+}
