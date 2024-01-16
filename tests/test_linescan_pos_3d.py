@@ -8,6 +8,7 @@ USE_CACHED_RESULTS = True
 cached_mib_and_tiff = USE_CACHED_RESULTS
 cached_unicorn = USE_CACHED_RESULTS
 cached_raw_data = USE_CACHED_RESULTS
+cached_raw_data2 = USE_CACHED_RESULTS
 cached_raw_data3 = USE_CACHED_RESULTS
 
 
@@ -73,6 +74,7 @@ UNICORN_PARAMETERS = {
 
 RAW_DATA_PARAMETERS = {
     "stem4d_file": "files/raw_data_dislocation_A.hdf5",
+    "output_file": "dislocation_A.pos.tdf",
     "image_scale": 0.78125,
     "diff_scale": 0.074677,
     "pos0": [201.6, 224.3],
@@ -83,6 +85,7 @@ RAW_DATA_PARAMETERS = {
 
 RAW_DATA2_PARAMETERS = {
     "stem4d_file": "files/raw_data_dislocation_B.hdf5",
+    "output_file": "dislocation_B.pos.tdf",
     "image_scale": 0.78125,
     "diff_scale": 0.074677,
     "pos0": [86.0, 121.7],
@@ -93,6 +96,7 @@ RAW_DATA2_PARAMETERS = {
 
 RAW_DATA3_PARAMETERS = {
     "stem4d_file": "files/raw_data_aluminum.hdf5",
+    "output_file": "aluminum.pos.tdf",
     "image_scale": 0.78125,
     "diff_scale": 0.074677,
     "pos0": [176.6, 135.3],
@@ -129,7 +133,7 @@ def prepare_unicorn():
 
 def prepare_raw_data():
     global cached_raw_data
-    output_file = Path("raw_data_dislocation_A.pos.tdf")
+    output_file = Path(RAW_DATA_PARAMETERS["output_file"])
     if not cached_raw_data or not output_file.is_file():
         if not Path(RAW_DATA_PARAMETERS["stem4d_file"]).is_file():
             return None  # Skip test due to missing files
@@ -140,20 +144,20 @@ def prepare_raw_data():
 
 
 def prepare_raw_data2():
-    global cached_raw_data
-    output_file = Path("raw_data_dislocation_B.pos.tdf")
-    if not cached_raw_data or not output_file.is_file():
+    global cached_raw_data2
+    output_file = Path(RAW_DATA2_PARAMETERS["output_file"])
+    if not cached_raw_data2 or not output_file.is_file():
         if not Path(RAW_DATA2_PARAMETERS["stem4d_file"]).is_file():
             return None  # Skip test due to missing files
 
-        cached_raw_data = True
+        cached_raw_data2 = True
         main(RAW_DATA2_PARAMETERS, "pos", lazy=True)
     return output_file
 
 
 def prepare_raw_data3():
     global cached_raw_data3
-    output_file = Path("raw_data_aluminum.pos.tdf")
+    output_file = Path(RAW_DATA3_PARAMETERS["output_file"])
     if not cached_raw_data3 or not output_file.is_file():
         if not Path(RAW_DATA3_PARAMETERS["stem4d_file"]).is_file():
             return None  # Skip test due to missing files

@@ -1,5 +1,6 @@
 {
     "stem4d_file": "raw_data_aluminum.hdf5",
+    "output_file": "aluminum.pos.tdf",
     "image_scale": 0.78125,
     "diff_scale": 0.074677,
     "pos0": [176.6, 135.3],
