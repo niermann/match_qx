@@ -1,0 +1,13 @@
+{
+  "linescan3d_file": "dislocation_B.qx.tdf",
+  "diff0": [
+    12.4,
+    113.3
+  ],
+  "diff1": [
+    250.3,
+    148.0
+  ],
+  "diffw": 19,
+  "diff_binsize": 1
+}

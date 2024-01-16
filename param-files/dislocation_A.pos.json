@@ -3,8 +3,14 @@
     "output_file": "dislocation_A.pos.tdf",
     "image_scale": 0.78125,
     "diff_scale": 0.074677,
-    "pos0": [201.6, 224.3],
-    "pos1": [204.1, 109.8],
+    "pos0": [
+        201.6,
+        224.3
+    ],
+    "pos1": [
+        204.1,
+        109.8
+    ],
     "posw": 49.5,
     "pos_binsize": 1
 }

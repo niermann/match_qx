@@ -1,5 +1,6 @@
 import numpy as np
-from src.linescan_pos_3d import main
+from src.linescan_pos_3d import main as pos_main
+from src.linescan_diff_2d import main as diff_main
 from pyctem.iolib import TemDataFile
 from pathlib import Path
 
@@ -46,7 +47,7 @@ CAMERA_LENGTH_CALIBRATION = {
     }
 }
 
-MIB_AND_TIFF_PARAMETERS = {
+POS_MIB_AND_TIFF_PARAMETERS = {
     "image_file": "files/STEM_20220718_1149_38_ADF1_ImagePanel1.tif",
     "stem4d_file": "files/alpha1_10cm_4C_0002_stelle1.mib",
     "pos0": [201.6, 224.3],
@@ -57,7 +58,7 @@ MIB_AND_TIFF_PARAMETERS = {
     "calibration_correction": 4.101
 }
 
-UNICORN_PARAMETERS = {
+POS_UNICORN_PARAMETERS = {
     "stem4d_file": "files/Stelle1_200_1M-1.tdf",
     "output_file": "Stelle1_200_1M-1.pos.tdf",
     "pos0": [176.6, 135.3],
@@ -68,7 +69,7 @@ UNICORN_PARAMETERS = {
     "calibration_correction": 4.101
 }
 
-RAW_DATA_PARAMETERS = {
+POS_RAW_DATA_PARAMETERS = {
     "stem4d_file": "files/raw_data_dislocation_A.hdf5",
     "output_file": "dislocation_A.pos.tdf",
     "image_scale": 0.78125,
@@ -79,7 +80,7 @@ RAW_DATA_PARAMETERS = {
     "pos_binsize": 1
 }
 
-RAW_DATA2_PARAMETERS = {
+POS_RAW_DATA2_PARAMETERS = {
     "stem4d_file": "files/raw_data_dislocation_B.hdf5",
     "output_file": "dislocation_B.pos.tdf",
     "image_scale": 0.78125,
@@ -90,7 +91,7 @@ RAW_DATA2_PARAMETERS = {
     "pos_binsize": 1
 }
 
-RAW_DATA3_PARAMETERS = {
+POS_RAW_DATA3_PARAMETERS = {
     "stem4d_file": "files/raw_data_aluminum.hdf5",
     "output_file": "aluminum.pos.tdf",
     "image_scale": 0.78125,
@@ -113,16 +114,16 @@ def prepare_pos_linescan(param, param_filename, output_file=None, **kw):
                 return None  # Skip test due to missing files
 
             cached_file.add(output_file)
-            main(param, param_filename, **kw)
+            pos_main(param, param_filename, **kw)
     return output_file
 
 
 def prepare_mib_and_tiff():
     output_file = Path("alpha1_10cm_4C_0002_stelle1.pos.tdf")
-    return prepare_pos_linescan(MIB_AND_TIFF_PARAMETERS, "pos", output_file=output_file, image_method="sum")
+    return prepare_pos_linescan(POS_MIB_AND_TIFF_PARAMETERS, "pos", output_file=output_file, image_method="sum")
 
 
-def test_mib_and_tiff():
+def test_pos_mib_and_tiff():
     output_file = prepare_mib_and_tiff()
     if not output_file:
         print("Skipped test 'test_mib_and_tiff' due to missing data files.")
@@ -148,10 +149,10 @@ def test_mib_and_tiff():
         assert abs(linescan.axes[2].scale - 0.074677) < 1e-5
 
 
-def test_unicorn():
-    output_file = prepare_pos_linescan(UNICORN_PARAMETERS, 'pos')
+def test_pos_unicorn():
+    output_file = prepare_pos_linescan(POS_UNICORN_PARAMETERS, 'pos')
     if not output_file:
-        print("Skipped test 'test_unicorn' due to missing data files.")
+        print("Skipped test 'test_pos_unicorn' due to missing data files.")
         return
 
     with TemDataFile(output_file, "r") as file:
@@ -174,10 +175,10 @@ def test_unicorn():
         assert abs(linescan.axes[2].scale - 0.074677) < 1e-5
 
 
-def test_raw_data():
-    output_file = prepare_pos_linescan(RAW_DATA_PARAMETERS, 'pos')
+def test_pos_raw_data():
+    output_file = prepare_pos_linescan(POS_RAW_DATA_PARAMETERS, 'pos')
     if not output_file:
-        print("Skipped test 'test_raw_data' due to missing data files.")
+        print("Skipped test 'test_pos_raw_data' due to missing data files.")
         return
 
     with TemDataFile(output_file, "r") as file:
@@ -200,10 +201,10 @@ def test_raw_data():
         assert abs(linescan.axes[2].scale - 0.074677) < 1e-5
 
 
-def test_raw_data2():
-    output_file = prepare_pos_linescan(RAW_DATA2_PARAMETERS, 'pos')
+def test_pos_raw_data2():
+    output_file = prepare_pos_linescan(POS_RAW_DATA2_PARAMETERS, 'pos')
     if not output_file:
-        print("Skipped test 'test_raw_data2' due to missing data files.")
+        print("Skipped test 'test_pos_raw_data2' due to missing data files.")
         return
 
     with TemDataFile(output_file, "r") as file:
@@ -226,10 +227,10 @@ def test_raw_data2():
         assert abs(linescan.axes[2].scale - 0.074677) < 1e-5
 
 
-def test_raw_data3():
-    output_file = prepare_pos_linescan(RAW_DATA3_PARAMETERS, 'pos')
+def test_pos_raw_data3():
+    output_file = prepare_pos_linescan(POS_RAW_DATA3_PARAMETERS, 'pos')
     if not output_file:
-        print("Skipped test 'test_raw_data3' due to missing data files.")
+        print("Skipped test 'test_pos_raw_data3' due to missing data files.")
         return
 
     with TemDataFile(output_file, "r") as file:
@@ -252,11 +253,11 @@ def test_raw_data3():
         assert abs(linescan.axes[2].scale - 0.074677) < 1e-5
 
 
-def test_dislocation_a():
+def test_pos_dislocation_a():
     original_filename = prepare_mib_and_tiff()
-    published_filename = prepare_pos_linescan(RAW_DATA_PARAMETERS, 'pos')
+    published_filename = prepare_pos_linescan(POS_RAW_DATA_PARAMETERS, 'pos')
     if not original_filename or not published_filename:
-        print("Skipped test 'test_dislocation_a' due to missing data files.")
+        print("Skipped test 'test_pos_dislocation_a' due to missing data files.")
         return
 
     with (TemDataFile(original_filename, "r") as original_file,
@@ -270,19 +271,108 @@ def test_dislocation_a():
         assert np.allclose(original_mean.get(copy=False), published_mean.get(copy=False))
 
 
-def test_aluminum():
-    original_filename = prepare_pos_linescan(UNICORN_PARAMETERS, 'pos')
-    published_filename = prepare_pos_linescan(RAW_DATA3_PARAMETERS, 'pos')
+def test_pos_aluminum():
+    original_filename = prepare_pos_linescan(POS_UNICORN_PARAMETERS, 'pos')
+    published_filename = prepare_pos_linescan(POS_RAW_DATA3_PARAMETERS, 'pos')
     if not original_filename or not published_filename:
+        print("Skipped test 'test_pos_aluminum' due to missing data files.")
+        return
+
+    with (TemDataFile(original_filename, "r") as original_file,
+          TemDataFile(published_filename,"r") as published_file):
+        original_image = original_file.read("image")
+        published_image = published_file.read("image")
+        assert np.allclose(original_image.get(copy=False), published_image.get(copy=False))
+
+        original_mean = original_file.read("mean")
+        published_mean = published_file.read("mean")
+        assert np.allclose(original_mean.get(copy=False), published_mean.get(copy=False))
+
+
+
+
+DIFF_DISLOCATION_A_PARAMETERS = {
+    "linescan3d_file": "dislocation_A.pos.tdf",
+    "output_file": "dislocation_A.qx.tdf",
+    "diff0": [157.1, 2.8],
+    "diff1": [119.6, 253.0],
+    "diffw": 19,
+    "diff_binsize": 1
+}
+
+DIFF_DISLOCATION_B_PARAMETERS = {
+    "linescan3d_file": "dislocation_B.pos.tdf",
+    "output_file": "dislocation_B.qx.tdf",
+    "diff0": [12.4, 113.3],
+    "diff1": [250.3, 148.0],
+    "diffw": 19,
+    "diff_binsize": 1
+}
+
+DIFF_ALUMINUM_PARAMETERS = {
+    "linescan3d_file": "aluminum.pos.tdf",
+    "output_file": "aluminum.qx.tdf",
+    "diff0": [148.7, 12.5],
+    "diff1": [108.9, 223.3],
+    "diffw": 18.0,
+    "diff_binsize": 0.5
+}
+
+
+def prepare_diff_linescan(param, param_filename, output_file=None, **kw):
+    output_file = Path(output_file if output_file else param["output_file"])
+    if not Path(param["linescan3d_file"]).is_file():
+        return None
+    diff_main(param, param_filename, **kw)
+    return output_file
+
+
+def test_diff_dislocation_a():
+    prepare_pos_linescan(POS_RAW_DATA_PARAMETERS, "pos")
+    output_file = prepare_diff_linescan(DIFF_DISLOCATION_A_PARAMETERS, "diff")
+    if not output_file:
+        print("Skipped test 'test_diff_dislocation_a' due to missing data files.")
+        return
+
+    with TemDataFile(output_file, "r") as file:
+        # Test linescan
+        linescan = file.read("mean")
+        assert linescan.shape == (253, 115)
+        assert linescan.axes[0].unit == "1/nm"
+        assert abs(linescan.axes[0].scale - 0.074677) < 1e-5
+        assert linescan.axes[1].unit == "nm"
+        assert abs(linescan.axes[1].scale - 0.78125) < 1e-5
+
+
+def test_diff_dislocation_b():
+    prepare_pos_linescan(POS_RAW_DATA2_PARAMETERS, "pos")
+    output_file = prepare_diff_linescan(DIFF_DISLOCATION_B_PARAMETERS, "diff")
+    if not output_file:
+        print("Skipped test 'test_diff_dislocation_b' due to missing data files.")
+        return
+
+    with TemDataFile(output_file, "r") as file:
+        # Test linescan
+        linescan = file.read("mean")
+        assert linescan.shape == (241, 87)
+        assert linescan.axes[0].unit == "1/nm"
+        assert abs(linescan.axes[0].scale - 0.074677) < 1e-5
+        assert linescan.axes[1].unit == "nm"
+        assert abs(linescan.axes[1].scale - 0.78125) < 1e-5
+
+
+def test_diff_aluminum():
+    prepare_pos_linescan(POS_RAW_DATA3_PARAMETERS, "pos")
+    output_file = prepare_diff_linescan(DIFF_ALUMINUM_PARAMETERS, "diff")
+    if not output_file:
         print("Skipped test 'test_aluminum' due to missing data files.")
         return
 
-    with (TemDataFile(original_filename, "r") as original_file,
-          TemDataFile(published_filename,"r") as published_file):
-        original_image = original_file.read("image")
-        published_image = published_file.read("image")
-        assert np.allclose(original_image.get(copy=False), published_image.get(copy=False))
-
-        original_mean = original_file.read("mean")
-        published_mean = published_file.read("mean")
-        assert np.allclose(original_mean.get(copy=False), published_mean.get(copy=False))
+    with TemDataFile(output_file, "r") as file:
+        # Test linescan
+        linescan = file.read("mean")
+        assert linescan.shape == (430, 77)
+        assert linescan.axes[0].unit == "1/nm"
+        assert abs(linescan.axes[0].scale - 0.074677 * 0.5) < 1e-5
+        assert linescan.axes[1].unit == "nm"
+        assert abs(linescan.axes[1].scale - 0.78125) < 1e-5

@@ -1,0 +1,14 @@
+{
+	"linescan3d_file": "dislocation_A.pos.tdf",
+	"output_file": "dislocation_A.qx.tdf",
+	"diff0": [
+		157.1,
+		2.8
+	],
+	"diff1": [
+		119.6,
+		253.0
+	],
+	"diffw": 19,
+	"diff_binsize": 1
+}

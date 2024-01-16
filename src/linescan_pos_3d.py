@@ -66,6 +66,15 @@ EXAMPLE_PARAMETER_FILE = """{
     
     // Size of profile bin (in pixels)
     //"binsize": 1.0,
+    
+    // Name of output file (TDF format) 
+    // If omitted, the output filename is concatenated from stem4d_file and the name of the parameter file.
+    // Output file will contain four datasets:
+    //   "image"  Scan-Image used for linescan creation
+    //   "mean"   3D Dataset with spatial linescan (averaged perpendicular to linescan). Dimensions [x, qy, qx] 
+    //   "var"    Variance of spatial linescan. Dimensions [x, qy, qx] 
+    //   "count"  Number of point contributing to spatial linescan. Dimensions [x, qy, qx] 
+    //"output_file": "some-output-file.tdf"
 }"""
 
 LINESCAN3D_VERSION = 4.0

@@ -1,15 +1,52 @@
 #!/usr/bin/env python3
-
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from matplotlib.widgets import Slider
 from pathlib import Path
 
-from tem.iolib import load_mib, load_tiff, TemDataFile
-from tem.hl import show_4d_stem, LinearAxis, DataSet, CoreMetaData, show_position_stem, apply_4d_stem, SumDetector
-from tem.proc import line_scan
-from tem.utils import decode_json
+from pyctem.iolib import load_mib, load_tiff, TemDataFile
+from pyctem.hl import show_4d_stem, LinearAxis, DataSet, CoreMetaData, show_position_stem, apply_4d_stem, SumDetector
+from pyctem.proc import line_scan
+from pyctem.utils import decode_json
+
+
+COPYRIGHT = """
+Copyright (c) 2024 Tore Niermann
+
+This program comes with ABSOLUTELY NO WARRANTY;
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version. See file 'COPYING' for details.
+"""
+
+
+EXAMPLE_PARAMETER_FILE = """{
+    // File with positional linescan (created by linescan_pos_3d.py) 
+    "linescan3d_file": "linescan_file.tdf",
+
+    // [qx, qy] Position of starting point of profile (in diffraction pattern pixels)
+    //"diff0": [64, 128], 
+
+    // [qx, qy] Position of ending point of profile (in diffraction pattern pixels)
+    //"diff1": [192, 128],
+    
+    // Width of profile (in diffraction pattern pixels)
+    //"diffw": 10.0,
+    
+    // Size of profile bin (in diffraction pattern pixels)
+    //"diff_binsize": 1.0,
+    
+    // Name of output file (TDF format) 
+    // If omitted, the output filename is concatenated from stem4d_file and the name of the parameter file.
+    // Output file will contain four datasets:
+    //   "mean"   2D Dataset with reciprocal and spatial linescan (averaged perpendicular to linescan in diffraction space). Dimensions [q, x] 
+    //   "var"    Variance of (reciprocal) linescan. Dimensions [q, x] 
+    //   "count"  Number of point contributing to (reciprocal) linescan. Dimensions [q, x] 
+    //"output_file": "some-output-file.tdf"
+}"""
 
 LINESCAN2D_VERSION = 1.2
 
@@ -124,8 +161,7 @@ class DraggableLineScan:
 
 def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result=False, log_diff=False, cmap="gray",
          dryrun=False):
-    work_dir = Path(param.get("work_dir", '.'))
-    source_path = work_dir / param["linescan3d_file"]
+    source_path = Path(param["linescan3d_file"])
 
     with TemDataFile(source_path, 'r') as source:
         pos_mean = source.read('mean')
@@ -218,7 +254,9 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser("Create x/q hyperplane from 4D-STEM position space linescan")
+    parser = argparse.ArgumentParser(description="Create qx-plane from 4D-STEM position space linescan",
+                                     epilog=COPYRIGHT + "\n\nExample parameter file:\n" + EXAMPLE_PARAMETER_FILE,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('paramfile')
     parser.add_argument('-s', '--show3d', action='store_true', default=False, help="Show 3D dataset")
     parser.add_argument('-l', '--linescan', action='store_true', default=False, help="Show linescan interactively")

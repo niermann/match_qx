@@ -1,0 +1,14 @@
+{
+  "linescan3d_file": "aluminum.pos.tdf",
+  "output_file": "aluminum.qx.tdf",
+  "diff0": [
+    148.7,
+    12.5
+  ],
+  "diff1": [
+    108.9,
+    223.3
+  ],
+  "diffw": 18.0,
+  "diff_binsize": 0.5
+}
