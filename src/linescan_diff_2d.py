@@ -5,8 +5,8 @@ import matplotlib.patches as patches
 from matplotlib.widgets import Slider
 from pathlib import Path
 
-from pyctem.iolib import load_mib, load_tiff, TemDataFile
-from pyctem.hl import show_4d_stem, LinearAxis, DataSet, CoreMetaData, show_position_stem, apply_4d_stem, SumDetector
+from pyctem.iolib import TemDataFile
+from pyctem.hl import LinearAxis, DataSet, show_position_stem
 from pyctem.proc import line_scan
 from pyctem.utils import decode_json
 
@@ -65,7 +65,7 @@ class DraggableLineScan:
         plt.subplots_adjust(bottom=0.25)
         self.ax.imshow(image, cmap=cmap)
 
-        ax_width = plt.axes([0.25, 0.1, 0.65, 0.03])
+        ax_width = plt.axes((0.25, 0.1, 0.65, 0.03))
         self.width_slider = Slider(ax=ax_width, label="Width", valmin=0, valmax=300, valinit=self.width)
 
         for p in self.points:
@@ -245,8 +245,8 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
                   (diff_mean.shape[0] - 0.5) * diff_scale + diff_offset, -0.5 * diff_scale + diff_offset]
         aspect = abs(extent[1] - extent[0]) / abs(extent[3] - extent[2])
         ax.imshow(diff_mean.get(), extent=extent, aspect=aspect)
-        ax.set_xlabel(f"{diff_mean.axes[1].name} ({diff_mean.axes[1].unit})")
-        ax.set_ylabel(f"{diff_mean.axes[0].name} ({diff_mean.axes[0].unit})")
+        ax.set_xlabel(f"{diff_mean.axes[1].name} ({getattr(diff_mean.axes[1], 'unit', '')})")
+        ax.set_ylabel(f"{diff_mean.axes[0].name} ({getattr(diff_mean.axes[0], 'unit', '')})")
         ax.set_title(output_path.stem)
         plt.show()
 

@@ -113,7 +113,7 @@ def prepare_pos_linescan(param, param_filename, output_file=None, **kw):
             if "image_file" in param and not Path(param["image_file"]).is_file():
                 return None  # Skip test due to missing files
 
-            cached_file.add(output_file)
+            cached_files.add(output_file)
             pos_main(param, param_filename, **kw)
     return output_file
 
