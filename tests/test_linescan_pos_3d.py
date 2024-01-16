@@ -5,11 +5,7 @@ from pathlib import Path
 
 
 USE_CACHED_RESULTS = True
-cached_mib_and_tiff = USE_CACHED_RESULTS
-cached_unicorn = USE_CACHED_RESULTS
-cached_raw_data = USE_CACHED_RESULTS
-cached_raw_data2 = USE_CACHED_RESULTS
-cached_raw_data3 = USE_CACHED_RESULTS
+cached_files = set()
 
 
 # Diff-scale (1/nm)/px [Voltage] [DetectAngleNumber]
@@ -106,65 +102,24 @@ RAW_DATA3_PARAMETERS = {
 }
 
 
+def prepare_pos_linescan(param, param_filename, output_file=None, **kw):
+    global cached_files
+    output_file = Path(output_file if output_file else param["output_file"])
+    if output_file not in cached_files:
+        if not USE_CACHED_RESULTS or not output_file.is_file():
+            if not Path(param["stem4d_file"]).is_file():
+                return None  # Skip test due to missing files
+            if "image_file" in param and not Path(param["image_file"]).is_file():
+                return None  # Skip test due to missing files
+
+            cached_file.add(output_file)
+            main(param, param_filename, **kw)
+    return output_file
+
+
 def prepare_mib_and_tiff():
-    global cached_mib_and_tiff
     output_file = Path("alpha1_10cm_4C_0002_stelle1.pos.tdf")
-    if not cached_mib_and_tiff or not output_file.is_file():
-        if not Path(MIB_AND_TIFF_PARAMETERS["stem4d_file"]).is_file() or \
-                not Path(MIB_AND_TIFF_PARAMETERS["image_file"]).is_file():
-            return None     # Skip test due to missing files
-
-        cached_mib_and_tiff = True
-        main(MIB_AND_TIFF_PARAMETERS, "pos", image_method="sum")
-    return output_file
-
-
-def prepare_unicorn():
-    global cached_unicorn
-    output_file = Path(UNICORN_PARAMETERS["output_file"])
-    if not cached_unicorn or not output_file.is_file():
-        if not Path(UNICORN_PARAMETERS["stem4d_file"]).is_file():
-            return None  # Skip test due to missing files
-
-        cached_unicorn = True
-        main(UNICORN_PARAMETERS, "overriden-param-file")
-    return output_file
-
-
-def prepare_raw_data():
-    global cached_raw_data
-    output_file = Path(RAW_DATA_PARAMETERS["output_file"])
-    if not cached_raw_data or not output_file.is_file():
-        if not Path(RAW_DATA_PARAMETERS["stem4d_file"]).is_file():
-            return None  # Skip test due to missing files
-
-        cached_raw_data = True
-        main(RAW_DATA_PARAMETERS, "pos", lazy=True)
-    return output_file
-
-
-def prepare_raw_data2():
-    global cached_raw_data2
-    output_file = Path(RAW_DATA2_PARAMETERS["output_file"])
-    if not cached_raw_data2 or not output_file.is_file():
-        if not Path(RAW_DATA2_PARAMETERS["stem4d_file"]).is_file():
-            return None  # Skip test due to missing files
-
-        cached_raw_data2 = True
-        main(RAW_DATA2_PARAMETERS, "pos", lazy=True)
-    return output_file
-
-
-def prepare_raw_data3():
-    global cached_raw_data3
-    output_file = Path(RAW_DATA3_PARAMETERS["output_file"])
-    if not cached_raw_data3 or not output_file.is_file():
-        if not Path(RAW_DATA3_PARAMETERS["stem4d_file"]).is_file():
-            return None  # Skip test due to missing files
-
-        cached_raw_data3 = True
-        main(RAW_DATA3_PARAMETERS, "pos", lazy=True, image_method="sum")
-    return output_file
+    return prepare_pos_linescan(MIB_AND_TIFF_PARAMETERS, "pos", output_file=output_file, image_method="sum")
 
 
 def test_mib_and_tiff():
@@ -194,7 +149,7 @@ def test_mib_and_tiff():
 
 
 def test_unicorn():
-    output_file = prepare_unicorn()
+    output_file = prepare_pos_linescan(UNICORN_PARAMETERS, 'pos')
     if not output_file:
         print("Skipped test 'test_unicorn' due to missing data files.")
         return
@@ -220,7 +175,7 @@ def test_unicorn():
 
 
 def test_raw_data():
-    output_file = prepare_raw_data()
+    output_file = prepare_pos_linescan(RAW_DATA_PARAMETERS, 'pos')
     if not output_file:
         print("Skipped test 'test_raw_data' due to missing data files.")
         return
@@ -246,7 +201,7 @@ def test_raw_data():
 
 
 def test_raw_data2():
-    output_file = prepare_raw_data2()
+    output_file = prepare_pos_linescan(RAW_DATA2_PARAMETERS, 'pos')
     if not output_file:
         print("Skipped test 'test_raw_data2' due to missing data files.")
         return
@@ -272,7 +227,7 @@ def test_raw_data2():
 
 
 def test_raw_data3():
-    output_file = prepare_raw_data3()
+    output_file = prepare_pos_linescan(RAW_DATA3_PARAMETERS, 'pos')
     if not output_file:
         print("Skipped test 'test_raw_data3' due to missing data files.")
         return
@@ -299,7 +254,7 @@ def test_raw_data3():
 
 def test_dislocation_a():
     original_filename = prepare_mib_and_tiff()
-    published_filename = prepare_raw_data()
+    published_filename = prepare_pos_linescan(RAW_DATA_PARAMETERS, 'pos')
     if not original_filename or not published_filename:
         print("Skipped test 'test_dislocation_a' due to missing data files.")
         return
@@ -316,8 +271,8 @@ def test_dislocation_a():
 
 
 def test_aluminum():
-    original_filename = prepare_unicorn()
-    published_filename = prepare_raw_data3()
+    original_filename = prepare_pos_linescan(UNICORN_PARAMETERS, 'pos')
+    published_filename = prepare_pos_linescan(RAW_DATA3_PARAMETERS, 'pos')
     if not original_filename or not published_filename:
         print("Skipped test 'test_aluminum' due to missing data files.")
         return
