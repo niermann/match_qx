@@ -62,7 +62,7 @@ MIB_AND_TIFF_PARAMETERS = {
 
 UNICORN_PARAMETERS = {
     "stem4d_file": "files/Stelle1_200_1M-1.tdf",
-    "output_file": "Stelle1_200_1M-1.pos1.tdf",
+    "output_file": "Stelle1_200_1M-1.pos.tdf",
     "pos0": [176.6, 135.3],
     "pos1": [127.5, 194.5],
     "posw": 21.6,
@@ -81,6 +81,16 @@ RAW_DATA_PARAMETERS = {
     "pos_binsize": 1
 }
 
+RAW_DATA2_PARAMETERS = {
+    "stem4d_file": "files/raw_data_dislocation_B.hdf5",
+    "image_scale": 0.78125,
+    "diff_scale": 0.074677,
+    "pos0": [86.0, 121.7],
+    "pos1": [35.2, 51.5],
+    "posw": 13.0,
+    "pos_binsize": 1
+}
+
 RAW_DATA3_PARAMETERS = {
     "stem4d_file": "files/raw_data_aluminum.hdf5",
     "image_scale": 0.78125,
@@ -94,14 +104,14 @@ RAW_DATA3_PARAMETERS = {
 
 def prepare_mib_and_tiff():
     global cached_mib_and_tiff
-    output_file = Path("alpha1_10cm_4C_0002_stelle1.pos1.tdf")
+    output_file = Path("alpha1_10cm_4C_0002_stelle1.pos.tdf")
     if not cached_mib_and_tiff or not output_file.is_file():
         if not Path(MIB_AND_TIFF_PARAMETERS["stem4d_file"]).is_file() or \
                 not Path(MIB_AND_TIFF_PARAMETERS["image_file"]).is_file():
             return None     # Skip test due to missing files
 
         cached_mib_and_tiff = True
-        main(MIB_AND_TIFF_PARAMETERS, "pos1", image_method="sum")
+        main(MIB_AND_TIFF_PARAMETERS, "pos", image_method="sum")
     return output_file
 
 
@@ -119,25 +129,37 @@ def prepare_unicorn():
 
 def prepare_raw_data():
     global cached_raw_data
-    output_file = Path("raw_data_dislocation_A.pos1.tdf")
+    output_file = Path("raw_data_dislocation_A.pos.tdf")
     if not cached_raw_data or not output_file.is_file():
         if not Path(RAW_DATA_PARAMETERS["stem4d_file"]).is_file():
             return None  # Skip test due to missing files
 
         cached_raw_data = True
-        main(RAW_DATA_PARAMETERS, "pos1", lazy=True)
+        main(RAW_DATA_PARAMETERS, "pos", lazy=True)
+    return output_file
+
+
+def prepare_raw_data2():
+    global cached_raw_data
+    output_file = Path("raw_data_dislocation_B.pos.tdf")
+    if not cached_raw_data or not output_file.is_file():
+        if not Path(RAW_DATA2_PARAMETERS["stem4d_file"]).is_file():
+            return None  # Skip test due to missing files
+
+        cached_raw_data = True
+        main(RAW_DATA2_PARAMETERS, "pos", lazy=True)
     return output_file
 
 
 def prepare_raw_data3():
     global cached_raw_data3
-    output_file = Path("raw_data_aluminum.pos1.tdf")
+    output_file = Path("raw_data_aluminum.pos.tdf")
     if not cached_raw_data3 or not output_file.is_file():
         if not Path(RAW_DATA3_PARAMETERS["stem4d_file"]).is_file():
             return None  # Skip test due to missing files
 
         cached_raw_data3 = True
-        main(RAW_DATA3_PARAMETERS, "pos1", lazy=True, image_method="sum")
+        main(RAW_DATA3_PARAMETERS, "pos", lazy=True, image_method="sum")
     return output_file
 
 
@@ -211,6 +233,32 @@ def test_raw_data():
         # Test linescan
         linescan = file.read("mean")
         assert linescan.shape == (115, 256, 256)
+        assert linescan.axes[0].unit == "nm"
+        assert abs(linescan.axes[0].scale - 0.78125) < 1e-5
+        assert linescan.axes[1].unit == "1/nm"
+        assert abs(linescan.axes[1].scale - 0.074677) < 1e-5
+        assert linescan.axes[2].unit == "1/nm"
+        assert abs(linescan.axes[2].scale - 0.074677) < 1e-5
+
+
+def test_raw_data2():
+    output_file = prepare_raw_data2()
+    if not output_file:
+        print("Skipped test 'test_raw_data2' due to missing data files.")
+        return
+
+    with TemDataFile(output_file, "r") as file:
+        # Test image
+        image = file.read("image")
+        assert image.shape == (256, 256)
+        assert image.axes[0].unit == "nm"
+        assert abs(image.axes[0].scale - 0.78125) < 1e-5
+        assert image.axes[1].unit == "nm"
+        assert abs(image.axes[1].scale - 0.78125) < 1e-5
+
+        # Test linescan
+        linescan = file.read("mean")
+        assert linescan.shape == (87, 256, 256)
         assert linescan.axes[0].unit == "nm"
         assert abs(linescan.axes[0].scale - 0.78125) < 1e-5
         assert linescan.axes[1].unit == "1/nm"

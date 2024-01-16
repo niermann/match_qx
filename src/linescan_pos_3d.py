@@ -188,8 +188,12 @@ def get_diff_axes(param, voltage, detect_angle):
 
 def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result=False, image_method=None, lazy=True,
          dryrun=False):
-    merlin_path = param["stem4d_file"]
-    image_path = param.get("image_file")
+    merlin_path = Path(param["stem4d_file"])
+
+    try:
+        image_path = Path(param["image_file"])
+    except KeyError:
+        image_path = None
 
     metadata = CoreMetaData()
     data = None
