@@ -1,6 +1,6 @@
 import numpy as np
-from src.linescan_pos_3d import main as pos_main
-from src.linescan_diff_2d import main as diff_main
+from match_qx.linescan_pos_3d import main as pos_main
+from match_qx.linescan_diff_2d import main as diff_main
 from pyctem.iolib import TemDataFile
 from pathlib import Path
 
