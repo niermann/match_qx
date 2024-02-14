@@ -1,3 +1,6 @@
+match_qx: Scripts for generation and evaluation of (q,x)-Plots
+==============================================================
+
 This repository is currently work in progress. 
 
 When complete it will contain tools to process 4D STEM images into (q,x)-plots and compare these
@@ -10,6 +13,19 @@ Requirements:
 * h5py >= ?
 * matplotlib >= ?
 * pyctem == 4.3
+
+
+Command line scripts
+--------------------
+
+* linescan_pos_3d.py
+* linescan_diff_2d.py
+
+Acknowledgements
+----------------
+
+This software results from projects funded by the Deutsche Forschungsgemeinschaft
+(DFG, German Research Foundation) within projects 492463633 and 403371556.
 
 License
 -------
