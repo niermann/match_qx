@@ -83,6 +83,7 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
     diff_unit = getattr(pos_mean.axes[1], "unit", "px")
 
     if show_linescan:
+        # TODO: have some sensible import path (relative import?)
         from linescan_gui import DraggableLineScan
         sum_diff = np.sum(pos_mean_view, axis=0)
         if log_diff:

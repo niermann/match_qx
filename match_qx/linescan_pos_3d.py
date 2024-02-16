@@ -8,7 +8,7 @@ from pyctem.hl import (show_4d_stem, LinearAxis, DataSet, CoreMetaData, show_pos
 from pyctem.proc import line_scan
 from pyctem.utils import decode_json
 from pyctem import TemMeasurementMetaData
-
+from tem import TemInstrumentMetaData, CameraDetectorMetaData
 
 COPYRIGHT = """
 Copyright (c) 2024 Tore Niermann
@@ -94,6 +94,7 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
         image_path = None
 
     metadata = CoreMetaData()
+    instrument_metadata = None
     data = None
     image = None
 
@@ -174,6 +175,7 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
                     pass
 
             data = load_mib(merlin_path, memmap=lazy, index_shape=image_shape, axes=image_axes + diff_axes)
+            instrument_metadata = getattr(image.metadata, "instrument")
         elif "image_area_size" in param:
             image_area_size = param["image_area_size"]
             image_shape = (image_area_size[1], image_area_size[0])
@@ -205,19 +207,17 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
     metadata['source'] = data.metadata.ref()
     if image is not None:
         metadata['image'] = image.metadata.ref()
-    try:
-        metadata['instrument'] = data.metadata.instrument
-    except AttributeError:
-        try:
-            metadata['instrument'] = image.metadata.instrument
-        except AttributeError:
-            pass
+    if instrument_metadata:
+        metadata['instrument'] = TemInstrumentMetaData(instrument_metadata)
+    else:
+        metadata['instrument'] = TemInstrumentMetaData(getattr(data.metadata, "instrument"))
+    metadata['detector'] = CameraDetectorMetaData(getattr(data.metadata, "detector"))
 
     if (not isinstance(data.axes[2], LinearAxis) or not isinstance(data.axes[3], LinearAxis)
             or getattr(data.axes[2], "unit", "px") == "px" or getattr(data.axes[3], "unit", "px") == "px"):
         try:
-            voltage = int(data.metadata.instrument.acceleration_voltage_kV)
-            detect_angle = int(data.metadata.instrument.camera_length_index)
+            voltage = int(metadata['instrument'].acceleration_voltage_kV)
+            detect_angle = int(metadata['instrument'].camera_length_index)
             diff_axes = get_diff_axes(param, voltage, detect_angle)
             data.axes = data.axes[0:2] + diff_axes
         except (AttributeError, KeyError, TypeError):
@@ -248,6 +248,7 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
         show_4d_stem(data, image, title=merlin_path, vmin=1)
 
     if show_linescan:
+        # TODO: have some sensible import path (relative import?)
         from linescan_gui import DraggableLineScan
         drag_gui = DraggableLineScan(image.get(), pos0, pos1, posw, title=linescan_path.name)
         drag_gui.run()
