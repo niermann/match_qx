@@ -1,0 +1,34 @@
+{
+    // File with experiment
+    "experimental": "dislocation_A.qx.tdf",
+
+    // File with calculation
+    "calculation": "~/simulations/disloc/hw_gan6_c_0002.tdf",
+
+    // Initial parameters
+    "initial": {
+        "semi_conv(1/nm)": 1.66,
+        "tilt(1/nm)": 1.873,
+        "depth(nm)": 55,
+        "thickness(nm)": 132,
+        "x_shift(nm)": -44.8,
+        "q_shift(1/nm)": -9.28
+    },
+
+
+    "brute_force_parameters": {
+        "thickness(nm)": null,
+        "depth(nm)": null
+    },
+    
+    "brute_force_labels": [
+        "$\\mathrm{Thickness}\\,t\\,(\\mathrm{nm})$",
+        "$\\mathrm{Depth}\\,d\\,(\\mathrm{nm})$"
+    ],
+    
+    "constrain_depth_thickness": true,
+    "subtract_background": true,
+    "optimized_parameters": ["tilt(1/nm)", "x_shift(nm)", "q_shift(1/nm)"],
+    "mtf": [["GAUSSIAN", 0.738033, 102.968], ["LORENTZIAN", 0.029029, 0.117078]],
+    "acceleration_voltage(kV)": 300.0
+}

@@ -175,7 +175,7 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
                     pass
 
             data = load_mib(merlin_path, memmap=lazy, index_shape=image_shape, axes=image_axes + diff_axes)
-            instrument_metadata = getattr(image.metadata, "instrument")
+            instrument_metadata = getattr(image.metadata, "instrument", None)
         elif "image_area_size" in param:
             image_area_size = param["image_area_size"]
             image_shape = (image_area_size[1], image_area_size[0])
@@ -210,8 +210,8 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
     if instrument_metadata:
         metadata['instrument'] = TemInstrumentMetaData(instrument_metadata)
     else:
-        metadata['instrument'] = TemInstrumentMetaData(getattr(data.metadata, "instrument"))
-    metadata['detector'] = CameraDetectorMetaData(getattr(data.metadata, "detector"))
+        metadata['instrument'] = TemInstrumentMetaData(getattr(data.metadata, "instrument", None))
+    metadata['detector'] = CameraDetectorMetaData(getattr(data.metadata, "detector", None))
 
     if (not isinstance(data.axes[2], LinearAxis) or not isinstance(data.axes[3], LinearAxis)
             or getattr(data.axes[2], "unit", "px") == "px" or getattr(data.axes[3], "unit", "px") == "px"):
