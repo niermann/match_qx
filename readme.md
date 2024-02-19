@@ -1,25 +1,36 @@
 match_qx: Scripts for generation and evaluation of (q,x)-Plots
 ==============================================================
 
-This repository is currently work in progress. 
+This repository contain tools to process 4D STEM images into (q,x)-plots and compare these
+plots with simulations. These tools were used in the following article:
 
-When complete it will contain tools to process 4D STEM images into (q,x)-plots and compare these
-plots with simulations.
+    T. Niermann, L. Niermann, M. Lehmann
+    "Three dimensional classiﬁcation of dislocations from single projections"
+    Nature Communication 15 (2024) 1356
+    DOI: https://doi.org/10.1038/s41467-024-45642-z
+    
+If you use these tools, please cite the above article. For further questions, please
+contact Tore Niermann (tore.niermann@tu-berlin.de).
 
-Requirements:
+Requirements (older versions of the packages might also work, but are not tested):
 
 * Python >= 3.10
-* numpy >= ?
-* h5py >= ?
-* matplotlib >= ?
+* numpy >= 1.26
+* matplotlib >= 3.8
 * pyctem == 4.3
 
 
 Command line scripts
 --------------------
 
+The scripts must be run in the "match_qx" sub-directory, since they import other
+modules from that directory (alternatively, add the "match_qx" sub-directory to your _PYTHON_PATH_).
+
 All scripts require _JSON_ parameter files as argument. Within the parameter file, they allow
 _JavaScript_-style comments and trailing commas in _array_ or _object_ element enumerations.   
+
+Be aware that these scripts when run in interactive mode, requires interactive matplotlib figures. Make sure
+you run them with a _matplotlib_ backend, which supports this.
 
 ### linescan_pos_3d.py
 
@@ -48,8 +59,8 @@ Script to match experimental and calculated (q,x)-Plots. For matching three para
     set of _optimized_parameters_ is optimized for each point in the brute force search space. Initial and other
     parameters are taken from _initial_.
 
-Supported parameters are identified by their name and unit, however only the units mentioned below are excepted.
-Beside the following parameters, parameters can also refer to additional dimensions present in the calculation, 
+Supported parameters are identified by their name and unit, however for each parameter only the
+described unit is excepted. Beside the following parameters, parameters can also refer to additional dimensions present in the calculation, 
 like "thickness(nm)". Additionally, the following parameters are supported by the script:
 * "semi_conv(1/nm)": Semiconvergence angle (as reciprocal length) of the probe. Default: 1.0 1/nm.
 * "tilt(1/nm)": Incident angle of the central beam (as reciprocal length). Default: 0.0 1/nm.
@@ -64,7 +75,7 @@ version of the parameter file. The "-i" option can be used to run an interactive
 specification of the detector's modulation transfer function ("mtf" parameter), 
 see https://holoaverage.readthedocs.io/en/latest/parameters.html#modulation-transfer-function
 
-_match_px_ offers the following command line options:
+_match_qx_ offers the following command line options:
 
 * -h, --help: Display help text and example parameter file
 * -i, --interactive: Run interactive matching session 
@@ -92,6 +103,11 @@ _match_px_ offers the following command line options:
     brute force parameters (in this order) and requires _ffmpeg_ to be properly installed and configured with matplotlib.  
 * --minloss=value: Minimum value on loss axis
 * --maxloss=value: Maximum value on loss axis
+
+Examples
+--------
+
+Exemplary parameter files are in directory "param-files". 
 
 Acknowledgements
 ----------------
