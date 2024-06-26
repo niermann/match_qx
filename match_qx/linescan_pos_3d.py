@@ -62,7 +62,7 @@ EXAMPLE_PARAMETER_FILE = """{
     //"posw": 10.0,
     
     // Size of profile bin (in pixels)
-    //"binsize": 1.0,
+    //"pos_binsize": 1.0,
     
     // Name of output file (TDF format) 
     // If omitted, the output filename is concatenated from stem4d_file and the name of the parameter file.
