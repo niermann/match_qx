@@ -72,13 +72,23 @@ EXAMPLE_PARAMETER_FILE = """{
     //   "var"    Variance of spatial linescan. Dimensions [x, qy, qx] 
     //   "count"  Number of point contributing to spatial linescan. Dimensions [x, qy, qx] 
     //"output_file": "some-output-file.tdf"
+    
+    // Calibrations for diffraction patterns (in 1/nm / px)
+    // First table indexed with acceleration voltage in kV, nested table by camera length index
+    //"camera_length_calibration": {
+    //   "300": { "13": 0.0265384, "12": 0.0339306 }
+    //},
+    
+    // Optional correction factor for calibration (is multiplied to value from table above) 
+    //"calibration_correction": 1.0,
 }"""
 
 LINESCAN3D_VERSION = 4.0
 
 
 def get_diff_axes(param, voltage, detect_angle):
-    diff_scale = param["camera_length_calibration"][voltage][detect_angle] * param.get("calibration_correction", 1.0)
+    diff_scale = param["camera_length_calibration"][str(int(voltage))][str(int(detect_angle))] * \
+                 param.get("calibration_correction", 1.0)
     diff_axes = (LinearAxis(name='qy', context='DIFFRACTION', unit='1/nm', scale=diff_scale),
                  LinearAxis(name='qx', context='DIFFRACTION', unit='1/nm', scale=diff_scale))
     return diff_axes
