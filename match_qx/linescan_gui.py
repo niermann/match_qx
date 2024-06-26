@@ -7,7 +7,7 @@ from matplotlib.widgets import Slider
 class DraggableLineScan:
     lock = None  # only one can be animated at a time
 
-    def __init__(self, image, pos0, pos1, width, title=None):
+    def __init__(self, image, pos0, pos1, width, title=None, cmap=None):
         self.pos = [np.array(pos0, dtype=float), np.array(pos1, dtype=float)]
         self.width = float(width)
         self.points = [patches.Circle(self.pos[0], 3, color='r', linewidth=0),
@@ -16,7 +16,8 @@ class DraggableLineScan:
 
         self.fig, self.ax = plt.subplots()
         plt.subplots_adjust(bottom=0.25)
-        self.ax.imshow(image, cmap="gray")
+        cmap = cmap if cmap else "gray"
+        self.ax.imshow(image, cmap=cmap)
 
         ax_width = plt.axes((0.25, 0.1, 0.65, 0.03))
         self.width_slider = Slider(ax=ax_width, label="Width", valmin=0, valmax=300, valinit=self.width)
