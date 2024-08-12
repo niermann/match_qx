@@ -27,6 +27,7 @@ EXAMPLE_PARAMETER_FILE = """{
     //  *.mib       Original Merlin Data file, requires valid image in 'image_file' or 'image_area_size' parameter.
     //  *.tdf       TEM Data File (PyCTEM file format)
     //  *.hdf5/h5   HDF5 File (if more than a single dataset is within the file, parameter 'stem4d_dataset' is required.
+    //              Also .h5 files create by NION Swift are supported
     "stem4d_file": "raw_data_aluminum.hdf5",
     
     // Name of 4D-STEM dataset within file 'stem4d_file' (optional).
@@ -86,6 +87,29 @@ EXAMPLE_PARAMETER_FILE = """{
 LINESCAN3D_VERSION = 4.0
 
 
+def parse_nion_metadata(nion_meta):
+    from json import loads
+    nion_meta = loads(nion_meta)
+
+    metadata = TemMeasurementMetaData()
+    metadata.uuid = nion_meta["uuid"]
+    metadata.timestamp = nion_meta["created"]
+
+    try:
+        metadata["unit"] = nion_meta["intensity_calibration"]["units"]
+    except KeyError:
+        pass
+
+    source = nion_meta["metadata"]["hardware_source"]
+    metadata.instrument.acceleration_voltage_kV = source["high_tension"] * 1e-3
+
+    axes = []
+    for a in metadata["dimensional_calibration"]:
+        axes.append(LinearAxis(offset=a.get("offset", 0.0), scale=a.get("scale", 1.0), unit=a.get("unit", "px")))
+
+    return axes, metadata
+
+
 def get_diff_axes(param, voltage, detect_angle):
     diff_scale = param["camera_length_calibration"][str(int(voltage))][str(int(detect_angle))] * \
                  param.get("calibration_correction", 1.0)
@@ -131,6 +155,13 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
             image = load_tdf(image_path, name=image_dataset)
         elif image_path.suffix in ['.tiff', '.tif']:
             image = load_tiff(image_path)
+        elif image_path.suffix == '.ndata':
+            with np.lib.npyio.NpzFile(image_path) as file:
+                image = file["data"]
+                nion_meta = file["metadata.json"]
+            axes, metadata = parse_nion_metadata(nion_meta)
+            metadata.filename = image_path
+            image = DataSet(data=image, axes=axes, metadata=metadata)
         else:
             raise ValueError(f"Unknown file format: {image_path}")
 
@@ -193,9 +224,9 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
         else:
             raise ValueError("'image_area_size' must be set, when 'image_file' is omitted.")
     elif merlin_path.suffix in ['.hdf5', '.h5']:
-        import h5py
-
         assert data is None
+
+        import h5py
         hdf5_file = h5py.File(merlin_path, "r")
         merlin_dataset = param.get("stem4d_dataset")
         if not merlin_dataset:
@@ -205,7 +236,16 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
             merlin_dataset = names[0]
 
         hdf5_data = hdf5_file[merlin_dataset]
-        metadata = TemMeasurementMetaData(filename=merlin_path, name=merlin_dataset)
+        try:
+            nion_meta = hdf5_data.attrs["properties"]
+            axes, metadata = parse_nion_metadata(nion_meta)
+            metadata.filename = image_path
+            if not image_scale:
+                image_axes = axes[0:2]
+            if not diff_scale:
+                diff_axes = axes[2:4]
+        except KeyError:
+            metadata = TemMeasurementMetaData(filename=merlin_path, name=merlin_dataset)
         if lazy:
             data = Hdf5DataSet(hdf5_data, axes=image_axes + diff_axes, metadata=metadata)
         else:
