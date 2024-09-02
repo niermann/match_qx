@@ -104,6 +104,12 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
     print(f'\t"diffw": {diffw:.1f},')
     print(f'\t"diff_binsize": {binsize:.1f},')
 
+    diff_scan = line_scan(pos_mean_view, diff0, diff1, diffw, axes=(2, 1), bin_size=binsize)
+    scan_axes = (
+        LinearAxis(name='q', context='DIFFRACTION', unit=diff_unit, scale=binsize * diff_scale),
+        pos_mean.axes[0]
+    )
+
     if not dryrun:
         with TemDataFile(output_path, 'w') as outfile:
             metadata = pos_mean.metadata.copy()
@@ -115,10 +121,6 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
             metadata['diffw'] = diffw
             metadata['diff_binsize'] = binsize
 
-            diff_scan = line_scan(pos_mean_view, diff0, diff1, diffw, axes=(2, 1), bin_size=binsize)
-
-            scan_axes = (
-            LinearAxis(name='q', context='DIFFRACTION', unit=diff_unit, scale=binsize * diff_scale), pos_mean.axes[0])
             diff_mean = DataSet(data=diff_scan[0], axes=scan_axes, metadata=metadata)
             diff_var = DataSet(data=diff_scan[1], axes=scan_axes, metadata=metadata)
             diff_count = DataSet(data=diff_scan[2], axes=scan_axes, metadata=metadata)
@@ -127,19 +129,23 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
             outfile.write_dataset(diff_var, name="var")
             outfile.write_dataset(diff_count, name="count")
 
+    # Show result and save as SVG image
+    fig, ax = plt.subplots()
+    pos_scale = getattr(scan_axes[1], "scale", 1.0)
+    pos_offset = getattr(scan_axes[1], "offset", 0.0)
+    diff_scale = getattr(scan_axes[0], "scale", 1.0)
+    diff_offset = getattr(scan_axes[0], "offset", 0.0)
+    extent = [-0.5 * pos_scale + pos_offset, (diff_scan[0].shape[1] - 0.5) * pos_scale + pos_offset,
+              (diff_scan[0].shape[0] - 0.5) * diff_scale + diff_offset, -0.5 * diff_scale + diff_offset]
+    aspect = abs(extent[1] - extent[0]) / abs(extent[3] - extent[2])
+    ax.imshow(diff_scan[0], extent=extent, aspect=aspect)
+    ax.set_xlabel(f"{scan_axes[1].name} ({getattr(scan_axes[1], 'unit', '')})")
+    ax.set_ylabel(f"{scan_axes[0].name} ({getattr(scan_axes[0], 'unit', '')})")
+    ax.set_title(output_path.stem)
+
+    if not dryrun:
+        fig.savefig(output_path.with_suffix(".svg"))
     if show_result:
-        fig, ax = plt.subplots()
-        pos_scale = getattr(diff_mean.axes[1], "scale", 1.0)
-        pos_offset = getattr(diff_mean.axes[1], "offset", 0.0)
-        diff_scale = getattr(diff_mean.axes[0], "scale", 1.0)
-        diff_offset = getattr(diff_mean.axes[0], "offset", 0.0)
-        extent = [-0.5 * pos_scale + pos_offset, (diff_mean.shape[1] - 0.5) * pos_scale + pos_offset,
-                  (diff_mean.shape[0] - 0.5) * diff_scale + diff_offset, -0.5 * diff_scale + diff_offset]
-        aspect = abs(extent[1] - extent[0]) / abs(extent[3] - extent[2])
-        ax.imshow(diff_mean.get(), extent=extent, aspect=aspect)
-        ax.set_xlabel(f"{diff_mean.axes[1].name} ({getattr(diff_mean.axes[1], 'unit', '')})")
-        ax.set_ylabel(f"{diff_mean.axes[0].name} ({getattr(diff_mean.axes[0], 'unit', '')})")
-        ax.set_title(output_path.stem)
         plt.show()
 
 
