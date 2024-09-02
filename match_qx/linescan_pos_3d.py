@@ -312,6 +312,17 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
     print(f'\t"posw": {posw:.1f},')
     print(f'\t"pos_binsize": {binsize:.1f},')
 
+    pos_scan = line_scan(data_view, pos0, pos1, posw, bin_size=binsize)
+    scan_axes = (
+        LinearAxis(name='x', context='POSITION', unit=image_unit, scale=binsize * image_scale),
+        data.axes[-2],
+        data.axes[-1]
+    )
+
+    pos_mean = DataSet(data=pos_scan[0], axes=scan_axes, metadata=metadata)
+    pos_var = DataSet(data=pos_scan[1], axes=scan_axes, metadata=metadata)
+    pos_count = DataSet(data=pos_scan[2], axes=scan_axes, metadata=metadata)
+
     if not dryrun:
         with TemDataFile(linescan_path, 'w') as outfile:
             metadata['linescan3d_version'] = LINESCAN3D_VERSION
@@ -321,18 +332,6 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
             metadata['pos_binsize'] = binsize
             metadata['pos_scale'] = image_scale
             metadata['pos_unit'] = image_unit
-
-            pos_scan = line_scan(data_view, pos0, pos1, posw, bin_size=binsize)
-
-            scan_axes = (
-                LinearAxis(name='x', context='POSITION', unit=image_unit, scale=binsize * image_scale),
-                data.axes[-2],
-                data.axes[-1]
-            )
-
-            pos_mean = DataSet(data=pos_scan[0], axes=scan_axes, metadata=metadata)
-            pos_var = DataSet(data=pos_scan[1], axes=scan_axes, metadata=metadata)
-            pos_count = DataSet(data=pos_scan[2], axes=scan_axes, metadata=metadata)
 
             outfile.write_dataset(pos_mean, name="mean")
             outfile.write_dataset(pos_var, name="var")
