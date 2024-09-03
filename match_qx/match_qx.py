@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 import time
 import os
+from abc import abstractproperty, abstractmethod, ABC
+from itertools import chain
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -265,7 +268,51 @@ class QXRenderer:
         return DataSet(data=csquare(result), axes=self.axes, metadata=metadata)
 
 
-class QXCalculationSelect:
+class QXCalculation(ABC):
+    @property
+    @abstractmethod
+    def metadata(self) -> CoreMetaData:
+        pass
+
+    @property
+    @abstractmethod
+    def beamlist(self) -> BeamList:
+        pass
+
+    @property
+    @abstractmethod
+    def shape(self) -> Tuple[Optional[int], ...]:
+        """Shape of the output"""
+        pass
+
+    @property
+    def axes(self) -> Tuple[Axis, ...]:
+        """Axes of the output"""
+        pass
+
+    @property
+    @abstractmethod
+    def q_dir_hkl(self) -> Tuple[int, int, int]:
+        """(HKL) of q-direction"""
+        pass
+
+    @abstractmethod
+    def other_axes(self) -> Tuple[Axis, ...]:
+        """Tuple with other Axis"""
+        pass
+
+    @abstractmethod
+    def other_shape(self) -> Tuple[Axis, ...]:
+        """Tuple with dimension of other indices"""
+        pass
+
+    @abstractmethod
+    def other_names(self) -> Tuple[str, ...]:
+        """Names of other axes"""
+        pass
+
+
+class QXCalculationSelector(QXCalculation):
     """
     Creates QX-plots from calculation data.
 
@@ -274,15 +321,17 @@ class QXCalculationSelect:
     :param tilt_index: Name or index of axis to use for tilt
     :param beam_index: Name or index of axis to use for beam index
     """
-    def __init__(self, amplitudes: DataSet, x_index: Union[str, int] = 'x', tilt_index: Union[str, int] = 'tilt',
+    def __init__(self, amplitudes: DataSet, beamlist: BeamList, x_index: Union[str, int] = 'x', tilt_index: Union[str, int] = 'tilt',
                  beam_index: Union[str, int] = 'beam'):
         self._amplitudes = amplitudes
+        self._beamlist = beamlist
         axes = self._amplitudes.axes
 
         self._x_index = self._get_axis(x_index)
         self._tilt_index = self._get_axis(tilt_index)
         self._beam_index = self._get_axis(beam_index)
 
+        self._q_dir_hkl = amplitudes.metadata["tilt_dir(hkl)"]
         self._other_indices = tuple(n for n in range(amplitudes.ndim) if n not in [self._x_index, self._beam_index, self._tilt_index])
         self._other_names = tuple(make_axis_name(axes[n], n) for n in self.other_indices())
 
@@ -324,7 +373,7 @@ class QXCalculationSelect:
         return self._amplitudes.dtype
 
     @property
-    def shape(self) -> Tuple[Axis, ...]:
+    def shape(self) -> Tuple[Optional[int], ...]:
         """Shape of the output"""
         return tuple(self._amplitudes.shape[n] for n in self._output_indices)
 
@@ -332,6 +381,18 @@ class QXCalculationSelect:
     def axes(self) -> Tuple[Axis, ...]:
         """Axes of the output"""
         return tuple(self._amplitudes.axes[n] for n in self._output_indices)
+
+    @property
+    def beamlist(self) -> BeamList:
+        return self._beamlist
+
+    @property
+    def metadata(self) -> CoreMetaData:
+        return self._amplitudes.metadata
+
+    @property
+    def q_dir_hkl(self) -> Tuple[int, int, int]:
+        return self._q_dir_hkl
 
     def other_indices(self) -> Tuple[int, ...]:
         """Tuple with other axis indices"""
@@ -477,7 +538,7 @@ class MatchQXPipeline:
     Encapsulate matching of QX plots.
 
     :param experimental: Experimental dataset, axes (x-axis, q-axis)
-    :param calculation: Calculation dataset, axes (x-axis, q-axis)
+    :param calculation: Calculation class, axes (x-axis, q-axis)
     :param beamlist: Beamlist for calculation
     :param background: Background estimation,
     :param x_axis: Override experimental X-axis
@@ -487,7 +548,7 @@ class MatchQXPipeline:
     :param voltage: Acceleration voltage (kV), taken from experimental if omitted
     :param weights: Weights for loss function, axes (x-axis, q-axis)
     """
-    def __init__(self, experimental: DataSet, calculation: DataSet, beamlist: BeamList,
+    def __init__(self, experimental: DataSet, calculation: QXCalculation,
                  background: Optional[ArrayLike] = None,
                  x_axis: Optional[LinearAxis] = None, q_axis: Optional[LinearAxis] = None,
                  q_margin: int = 3, mtf: Optional[Tuple] = None, voltage: Optional[float] = None,
@@ -503,7 +564,6 @@ class MatchQXPipeline:
 
         self.calculation = calculation
         self.voltage = experimental.metadata["instrument"]["acceleration_voltage(kV)"] if voltage is None else float(voltage)
-        self.beamlist = beamlist
         if background is not None:
             self.background = np.array(background, dtype=float)
             self.experimental = DataSet(data=self.experimental.get() - self.background, axes=self.experimental.axes, metadata=self.experimental.metadata)
@@ -523,7 +583,6 @@ class MatchQXPipeline:
         self._q_axis = q_axis
 
         # Pipeline
-        self._select = QXCalculationSelect(self.calculation)
         self._q_shift = None
         self._x_shift = None
         self._make_renderer(0.0, 0.0)
@@ -547,7 +606,7 @@ class MatchQXPipeline:
             "defocus(nm)": 1.0,
             "curvature(1/nm2)": 0.001,
         }
-        for name, axis in zip(self._select.other_names(), self._select.other_axes()):
+        for name, axis in zip(self.calculation.other_names(), self.calculation.other_axes()):
             if isinstance(axis, SampledAxis):
                 axis = axis.try_linear()
             self._param_scales[name] = getattr(axis, "scale", 1.0)
@@ -567,15 +626,15 @@ class MatchQXPipeline:
 
     def other_keys(self):
         """Return keys needed for calculation selection"""
-        return self._select.other_names()
+        return self.calculation.other_names()
 
     def other_axes(self):
         """Return axes of keys needed for calculation selection"""
-        return self._select.other_axes()
+        return self.calculation.other_axes()
 
     def other_shape(self):
         """Return shape of keys needed for calculation selection"""
-        return self._select.other_shape()
+        return self.calculation.other_shape()
 
     @property
     def weights(self) -> Optional[np.ndarray]:
@@ -604,8 +663,8 @@ class MatchQXPipeline:
         shape = (self.experimental.shape[0], self.experimental.shape[1] + 2 * self._q_margin)
 
         # TODO: Preliminary fix for interpolation problem is setting method to "nearest" (instead of "linear")
-        self._renderer = QXRenderer(self.beamlist, shape, x_axis=self._x_axis, q_axis=q_axis,  #method="nearest",
-                                    q_dir_hkl=self.calculation.metadata["tilt_dir(hkl)"], voltage=self.voltage)
+        self._renderer = QXRenderer(self.calculation.beamlist, shape, x_axis=self._x_axis, q_axis=q_axis,  #method="nearest",
+                                    q_dir_hkl=self.calculation.q_dir_hkl, voltage=self.voltage)
 
     def evaluate(self, param):
         q_shift = param["q_shift(1/nm)"]
@@ -614,7 +673,7 @@ class MatchQXPipeline:
             self._make_renderer(q_shift, x_shift)
 
         other_index = {k: int(param[k]) for k in self.other_keys()}
-        calculation = self._select(other_index)
+        calculation = self.calculation(other_index)
 
         semi_conv = param["semi_conv(1/nm)"]
         tilt = param["tilt(1/nm)"]
@@ -1063,20 +1122,34 @@ def brute_force(pipeline: MatchQXPipeline, initial_param: Dict[str, float], axes
     return result_param, result_loss
 
 
-def create_sub_sample_axes(dataset: DataSet, key: str, min_max_step: Optional[Tuple[Optional[float], ...]] = None):
+def create_sub_sample_axes(calculation: QXCalculation, key: str, min_max_step: Optional[Tuple[Optional[float], ...]] = None):
     name, unit = split_name_and_unit(key)
-    index = dataset.index_axis(name=name)
-    if dataset.axes[index].unit != unit:
-        raise ValueError(f"Expected unit '{unit}' on axis: {dataset.axes[index]}")
-    samples = dataset.axis_range(index)
-    if min_max_step is None:
-        min_max_step = None, None, 1
-    amin = min_max_step[0] if min_max_step[0] is not None else np.amin(samples)
-    amax = min_max_step[1] if min_max_step[1] is not None else np.amax(samples)
-    step = min_max_step[2] if len(min_max_step) > 2 and min_max_step[2] else 1
-    imin = np.argmin(abs(amin - samples))
-    imax = np.argmin(abs(amax - samples))
-    return SampledAxis(name=name, unit=unit, samples=samples[imin:imax:step])
+
+    try:
+        dim, axis = next(pair for pair in zip(chain(calculation.shape, calculation.other_shape()),
+                                              chain(calculation.axes, calculation.other_axes()))
+                         if pair[1].name == name)
+    except StopIteration:
+        raise ValueError(f"No parameter '{name}' found.")
+    if axis.unit != unit:
+        raise ValueError(f"Expected unit '{unit}' on axis: {axis}")
+
+    if dim is None:
+        if not min_max_step or any(m is None for m in min_max_step):
+            raise ValueError(f"Expected min, max, step for continuous parameter '{key}'")
+        amin, amax, step = min_max_step
+        count = (amax - amin) // step
+        return SampledAxis(name=name, unit=unit, samples=np.arange(count, dtype=float) * step + amin)
+    else:
+        samples = axis.range(dim)
+        if min_max_step is None:
+            min_max_step = None, None, 1
+        amin = min_max_step[0] if min_max_step[0] is not None else np.amin(samples)
+        amax = min_max_step[1] if min_max_step[1] is not None else np.amax(samples)
+        step = min_max_step[2] if len(min_max_step) > 2 and min_max_step[2] else 1
+        imin = np.argmin(abs(amin - samples))
+        imax = np.argmin(abs(amax - samples))
+        return SampledAxis(name=name, unit=unit, samples=samples[imin:imax:step])
 
 
 def background_support(dataset: DataSet, beamlist: BeamList, q_dir_hkl: ArrayLike, q_shift: float = 0.0,
@@ -1402,13 +1475,16 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     width = float(width) if width is not None else rc_params["figure.figsize"][0] * dpi
     height = float(height) if height is not None else rc_params["figure.figsize"][1] * dpi
 
-    calc_file = TemDataFile(calculation_path, "r")
-    calculation = calc_file.read("amplitudes", lazy=lazy_calculation)
-    beamlist = calc_file.read(calculation.metadata["beamlist_uuid"])
+    if 1:
+        calc_file = TemDataFile(calculation_path, "r")
+        amplitudes = calc_file.read("amplitudes", lazy=lazy_calculation)
+        beamlistX = calc_file.read(amplitudes.metadata["beamlist_uuid"])
+        calculationX = QXCalculationSelector(amplitudes, beamlistX)
+    #beamlist = calc_file.read(calculation.metadata["beamlist_uuid"])
 
     if subtract_background:
         q_range = experimental.axis_range(1) + initial_param.get("q_shift(1/nm)", 0.0)
-        g_support, b_support = background_support(experimental, beamlist, q_dir_hkl=calculation.metadata["tilt_dir(hkl)"],
+        g_support, b_support = background_support(experimental, calculationX.beamlist, q_dir_hkl=calculationX.q_dir_hkl,
                                                   q_shift=initial_param.get("q_shift(1/nm)", 0.0))
         background = gaussian_background_constrained(q_range, g_support, b_support)
 
@@ -1420,7 +1496,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     else:
         background = None
 
-    pipeline = MatchQXPipeline(experimental, calculation, beamlist, background=background,
+    pipeline = MatchQXPipeline(experimental, calculationX, background=background,
                                mtf=mtf, voltage=voltage)
     if optimized_parameters:
         optimized_parameters = tuple(optimized_parameters)
@@ -1439,7 +1515,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     rescale_loss = get_loss_scale(pipeline.experimental.get(copy=False), relative_losses)
 
     if brute_force_parameters:
-        brute_force_axes = tuple(create_sub_sample_axes(calculation, key, value) for key, value in
+        brute_force_axes = tuple(create_sub_sample_axes(calculationX, key, value) for key, value in
                                  brute_force_parameters.items())
         brute_force_name = Path(filename).with_suffix('.brute_force.tdf')
 
@@ -1474,7 +1550,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
 
             metadata = CoreMetaData()
             metadata["experimental"] = experimental.metadata.ref()
-            metadata["calculation"] = calculation.metadata.ref()
+            metadata["calculation"] = calculationX.metadata.ref()
             metadata["optimized_param"] = optimized_parameters
             metadata["initial_param"] = all_initial_param
             metadata["subtract_background"] = subtract_background
@@ -1497,8 +1573,8 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
         title = []
         if experimental.metadata.filename:
             title.append("Experimental: " + Path(experimental.metadata.filename).stem)
-        if calculation.metadata.filename:
-            title.append("Calculation: " + Path(calculation.metadata.filename).stem)
+        if calculationX.metadata.filename:
+            title.append("Calculation: " + Path(calculationX.metadata.filename).stem)
 
         plt.suptitle('\n'.join(title))
 
