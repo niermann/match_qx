@@ -12,8 +12,8 @@ from pathlib import Path
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from scipy.interpolate import interpn
 
-from pyctem import BeamList, CoreMetaData
-from pyctem.hl import LinearAxis, DataSet, Axis, BaseDataSet, SampledAxis, DataSetLike, as_dataset
+from pyctem import BeamList, CoreMetaData, SuperCell
+from pyctem.hl import LinearAxis, DataSet, Axis, BaseDataSet, SampledAxis, DataSetLike, as_dataset, BeamIndexAxis
 from pyctem.utils import DTypeLike, ArrayLike, csquare, decode_json, cross_3d, calc_wavelength
 from pyctem.iolib import load_tdf, TemDataFile
 
@@ -268,6 +268,15 @@ class QXRenderer:
         return DataSet(data=csquare(result), axes=self.axes, metadata=metadata)
 
 
+def create_samples_from_range(amin: float, amax: float, step: float, dtype: None):
+    if dtype is None:
+        dtype = float
+    count = (amax - amin) // step
+    if abs(amin + count * step - amax) < 1e-4:
+        count += 1
+    return np.arange(count, dtype=dtype) * step + amin
+
+
 class QXCalculation(ABC):
     @property
     @abstractmethod
@@ -311,6 +320,168 @@ class QXCalculation(ABC):
     def other_names(self) -> Tuple[str, ...]:
         """Names of other axes"""
         pass
+
+    @abstractmethod
+    def __call__(self, other: Optional[Mapping[str, int]] = None) -> DataSet:
+        """Return DataSet with (index, tilt, x) dimensions for given values of other_axes."""
+        pass
+
+
+class QXBlochWaveCalculation(QXCalculation):
+    """
+    Creates QX-plots from bloch wave calculation.
+
+    :param crystal: SuperCell
+    :param beamlist: BeamList
+    :param q_dir_hkl: HKL of tilt direction
+    :param tilt_range: min, max, step of tilt-range
+    :param voltage: Acceleration voltage (kV)
+    """
+    def __init__(self, crystal: SuperCell, beamlist: BeamList, q_dir_hkl: Tuple[int, int, int], tilt_range: Tuple[float, float, float], voltage: float):
+        self.crystal = crystal
+        self._beamlist = beamlist
+        self._q_dir_hkl = q_dir_hkl
+        self._metadata = crystal.metadata
+        self._tilt_samples = create_samples_from_range(*tilt_range)
+        self.voltage = voltage
+
+        self._shape = (len(beamlist), len(self._tilt_samples), 1)
+        self._axes = (BeamIndexAxis(beamlist, name="beam"),
+                      SampledAxis(name="tilt", unit="1/nm", samples=self._tilt_samples),
+                      LinearAxis(name="x", context="POSITION", unit="nm", scale=1.0, offset=0.0))
+
+        self._other_axes = Axis(name="thickness", unit="nm"),
+        self._other_shape = None,
+
+        @property
+        def metadata(self) -> CoreMetaData:
+            return self._metadata
+
+        @property
+        def beamlist(self) -> BeamList:
+            return self._beamlist
+
+        @property
+        def shape(self) -> Tuple[Optional[int], ...]:
+            """Shape of the output"""
+            return self._shape
+
+        @property
+        def axes(self) -> Tuple[Axis, ...]:
+            """Axes of the output"""
+            return self._axes
+
+        @property
+        def q_dir_hkl(self) -> Tuple[int, int, int]:
+            """(HKL) of q-direction"""
+            return self._q_dir_hkl
+
+        @abstractmethod
+        def other_axes(self) -> Tuple[Axis, ...]:
+            """Tuple with other Axis"""
+            return self._other_axes
+
+        @abstractmethod
+        def other_shape(self) -> Tuple[Optional[int], ...]:
+            """Tuple with dimension of other indices"""
+            return self._other_shape
+
+        @abstractmethod
+        def other_names(self) -> Tuple[str, ...]:
+            """Names of other axes"""
+            return tuple(axis.name for axis in self._other_axes)
+
+
+def import_crystal(name: str, base_dir: Optional[Path] = None) -> SuperCell:
+    import pyctem.iolib
+
+    base_dir = Path(base_dir) if base_dir is not None else Path.cwd()
+    load_cif = getattr(pyctem.iolib, 'load_cif', None)
+
+    filename, dataset = name.split('?', 1)
+    file = base_dir / Path(filename)
+
+    if file.is_file():
+        if file.suffix == '.tdf':
+            with TemDataFile(file, "r") as tdf_file:
+                crystal = tdf_file.read(dataset, cls=TemDataFile.CLASS_SUPERCELL)
+        elif file.suffix == '.cif' and load_cif:
+            crystal = load_cif(file)
+
+    if crystal is None:
+        from pyctem.geometry import Material
+        import pyctem.data
+
+        full_name = "%sMaterial" % name
+        material_class = getattr(pyctem.data, full_name)
+        if not issubclass(material_class, Material):
+            raise TypeError("Expected %s to be a subclass of Material." % material_class.__name__)
+        material = material_class()
+        if material.name() != name:
+            raise ValueError("Expected material %s's name to be %s" % (material_class.__name__, name))
+        crystal = material.build_crystal()
+
+    return crystal
+
+
+def create_bloch_wave_calculation(param: Dict[str, Any], voltage: float, verbose: int = 0):
+    from pyctem.sim import get_formfactor_database
+    from pyctem import create_beamlist
+
+    voltage = float(voltage)
+    wavelength = calc_wavelength(voltage)
+    formfactor_db = get_formfactor_database(param.get("formfactor_db"))
+    tilt_range = param["tilt_range"]
+
+    # Load crystal
+    crystal = import_crystal(param["crystal"], base_dir=base_dir)
+    coord = crystal.coord
+
+    # Prepare directions
+    zoneaxis_uvw = param['zoneaxis_uvw']
+    zoneaxis_dir = coord.map_real_to_cartesian(zoneaxis_uvw)
+    zoneaxis_dir /= np.sqrt(np.sum(zoneaxis_dir ** 2))
+
+    foilnormal_uvw = param.get("foilnormal")
+    if foilnormal_uvw:
+        foilnormal = coord.map_real_to_cartesian(np.array(foilnormal_uvw, dtype=float))
+        foilnormal /= np.sqrt(np.sum(foilnormal ** 2))
+    else:
+        foilnormal = zoneaxis_dir
+
+    # Create beam list for crystal #0
+    systematic_row = param.get("systematic_row")
+    if systematic_row is not None:
+        systematic_row = np.array(systematic_row, dtype=int)
+        if abs(np.dot(zoneaxis_uvw, systematic_row)) > 1e-5:
+            raise ValueError(f"Systematic row not perpendicular to zone axis.")
+
+    wavevector = zoneaxis_dir / wavelength
+
+    max_rcpr_distance = float(param.get("max_rcpr_distance", 30.0))
+    min_potential = float(param.get("min_potential", 0.01))
+    max_exc_error = float(param.get("max_exc_error", 0.5))
+    beamlist = create_beamlist(crystal, wavevector, systematic_row=systematic_row,
+                               foilnormal=foilnormal, max_rcpr_distance=max_rcpr_distance,
+                               min_potential=min_potential, max_exc_error=max_exc_error)
+
+    tilt_dir_hkl = param.get("tilt_dir_hkl", systematic_row)
+    if tilt_dir_hkl is None:
+        raise ValueError("Parameter 'tilt_dir_hkl' required if no systematic row is given.")
+    tilt_dir_hkl = np.array(tilt_dir_hkl, dtype=float)
+
+    if verbose >= 1:
+        if systematic_row is not None:
+            print(f"\tSystematic row (hkl): {systematic_row}")
+        if zoneaxis_uvw is not None:
+            print(f"\tZoneaxis [uvw]:       {zoneaxis_uvw}")
+        print(f"\tFoil-normal:          {foilnormal}")
+        if tilt_dir_hkl is not None:
+            print(f"\tTilt direction (hkl): {tilt_dir_hkl}")
+        print(f"\tWavevector (1/nm):    {wavevector}")
+        print(f"\tBeam direction:       {wavevector / np.sqrt(np.sum(wavevector ** 2))}")
+
+    return QXBlochWaveCalculation(crystal, beamlist, q_dir_hkl=tilt_dir_hkl, tilt_range=tilt_range, voltage=voltage)
 
 
 class QXCalculationSelector(QXCalculation):
@@ -486,7 +657,7 @@ def apply_mtf(source: DataSet, mtf_param: Iterable[Tuple], axis: int = -1, binni
     :param axis: Axis to apply MTF to
     :param binning: Binning
     """
-    from tem.utils import parameterized_mtf, get_float_dtype
+    from pyctem.utils import parameterized_mtf, get_float_dtype
 
     if axis < 0:
         axis += source.ndim
@@ -1138,19 +1309,18 @@ def create_sub_sample_axes(calculation: QXCalculation, key: str, min_max_step: O
     if dim is None:
         if not min_max_step or any(m is None for m in min_max_step):
             raise ValueError(f"Expected min, max, step for continuous parameter '{key}'")
-        amin, amax, step = min_max_step
-        count = (amax - amin) // step
-        return SampledAxis(name=name, unit=unit, samples=np.arange(count, dtype=float) * step + amin)
+        samples = create_samples_from_range(*min_max_step)
     else:
-        samples = axis.range(dim)
+        full_samples = axis.range(dim)
         if min_max_step is None:
             min_max_step = None, None, 1
-        amin = min_max_step[0] if min_max_step[0] is not None else np.amin(samples)
-        amax = min_max_step[1] if min_max_step[1] is not None else np.amax(samples)
+        amin = min_max_step[0] if min_max_step[0] is not None else np.amin(full_samples)
+        amax = min_max_step[1] if min_max_step[1] is not None else np.amax(full_samples)
         step = min_max_step[2] if len(min_max_step) > 2 and min_max_step[2] else 1
-        imin = np.argmin(abs(amin - samples))
-        imax = np.argmin(abs(amax - samples))
-        return SampledAxis(name=name, unit=unit, samples=samples[imin:imax:step])
+        imin = np.argmin(abs(amin - full_samples))
+        imax = np.argmin(abs(amax - full_samples))
+        samples = full_samples[imin:imax:step]
+    return SampledAxis(name=name, unit=unit, samples=samples)
 
 
 def background_support(dataset: DataSet, beamlist: BeamList, q_dir_hkl: ArrayLike, q_shift: float = 0.0,
@@ -1479,13 +1649,13 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     if 1:
         calc_file = TemDataFile(calculation_path, "r")
         amplitudes = calc_file.read("amplitudes", lazy=lazy_calculation)
-        beamlistX = calc_file.read(amplitudes.metadata["beamlist_uuid"])
-        calculationX = QXCalculationSelector(amplitudes, beamlistX)
+        beamlist = calc_file.read(amplitudes.metadata["beamlist_uuid"])
+        calculation = QXCalculationSelector(amplitudes, beamlist)
     #beamlist = calc_file.read(calculation.metadata["beamlist_uuid"])
 
     if subtract_background:
         q_range = experimental.axis_range(1) + initial_param.get("q_shift(1/nm)", 0.0)
-        g_support, b_support = background_support(experimental, calculationX.beamlist, q_dir_hkl=calculationX.q_dir_hkl,
+        g_support, b_support = background_support(experimental, calculation.beamlist, q_dir_hkl=calculation.q_dir_hkl,
                                                   q_shift=initial_param.get("q_shift(1/nm)", 0.0))
         background = gaussian_background_constrained(q_range, g_support, b_support)
 
@@ -1497,7 +1667,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     else:
         background = None
 
-    pipeline = MatchQXPipeline(experimental, calculationX, background=background,
+    pipeline = MatchQXPipeline(experimental, calculation, background=background,
                                mtf=mtf, voltage=voltage)
     if optimized_parameters:
         optimized_parameters = tuple(optimized_parameters)
@@ -1516,7 +1686,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     rescale_loss = get_loss_scale(pipeline.experimental.get(copy=False), relative_losses)
 
     if brute_force_parameters:
-        brute_force_axes = tuple(create_sub_sample_axes(calculationX, key, value) for key, value in
+        brute_force_axes = tuple(create_sub_sample_axes(calculation, key, value) for key, value in
                                  brute_force_parameters.items())
         brute_force_name = Path(filename).with_suffix('.brute_force.tdf')
 
@@ -1551,7 +1721,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
 
             metadata = CoreMetaData()
             metadata["experimental"] = experimental.metadata.ref()
-            metadata["calculation"] = calculationX.metadata.ref()
+            metadata["calculation"] = calculation.metadata.ref()
             metadata["optimized_param"] = optimized_parameters
             metadata["initial_param"] = all_initial_param
             metadata["subtract_background"] = subtract_background
@@ -1574,8 +1744,8 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
         title = []
         if experimental.metadata.filename:
             title.append("Experimental: " + Path(experimental.metadata.filename).stem)
-        if calculationX.metadata.filename:
-            title.append("Calculation: " + Path(calculationX.metadata.filename).stem)
+        if calculation.metadata.filename:
+            title.append("Calculation: " + Path(calculation.metadata.filename).stem)
 
         plt.suptitle('\n'.join(title))
 
