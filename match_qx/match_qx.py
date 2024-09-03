@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import time
 import os
-from abc import abstractproperty, abstractmethod, ABC
+from abc import abstractmethod, ABC
 from itertools import chain
 
 import matplotlib.pyplot as plt
@@ -286,6 +286,7 @@ class QXCalculation(ABC):
         pass
 
     @property
+    @abstractmethod
     def axes(self) -> Tuple[Axis, ...]:
         """Axes of the output"""
         pass
@@ -302,7 +303,7 @@ class QXCalculation(ABC):
         pass
 
     @abstractmethod
-    def other_shape(self) -> Tuple[Axis, ...]:
+    def other_shape(self) -> Tuple[Optional[int], ...]:
         """Tuple with dimension of other indices"""
         pass
 
@@ -931,7 +932,7 @@ class MatchQXPlot:
             additional_updates.append((plot.update, state))
 
         other_shape = self.pipeline.other_shape()
-        other_num = sum(1 for s in other_shape if s > 1)
+        other_num = sum(1 for s in other_shape if (s is None) or (s > 1))
         layouter = WidgetLayouter(5 + other_num)
         other_range = {}
 
@@ -1047,7 +1048,7 @@ class MatchQXPlot:
                 if title:
                     fig.suptitle(title.format(value=value))
                 else:
-                    fig.suptitle('\n'.join(self.title + [f"{key}: {value}", f"Loss: {loss * self.rescale_los}"]))
+                    fig.suptitle('\n'.join(self.title + [f"{key}: {value}", f"Loss: {loss * self.rescale_loss}"]))
 
                 extent = self.get_extent(calc)
                 ax[0].set_xlim(extent[0], extent[1])
