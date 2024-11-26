@@ -253,6 +253,8 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
             del hdf5_data
             hdf5_file.close()
             del hdf5_file
+    else:
+        raise ValueError("Not a supported 4DSTEM data file format")
 
     metadata['source'] = data.metadata.ref()
     if image is not None:
