@@ -268,7 +268,7 @@ class QXRenderer:
         return DataSet(data=csquare(result), axes=self.axes, metadata=metadata)
 
 
-def create_samples_from_range(amin: float, amax: float, step: float, dtype: None):
+def create_samples_from_range(amin: float, amax: float, step: float, dtype=None):
     if dtype is None:
         dtype = float
     count = (amax - amin) // step
@@ -323,7 +323,7 @@ class QXCalculation(ABC):
 
     @abstractmethod
     def __call__(self, other: Optional[Mapping[str, int]] = None) -> DataSet:
-        """Return DataSet with (index, tilt, x) dimensions for given values of other_axes."""
+        """Return DataSet with (index, x, tilt) dimensions for given values of other_axes."""
         pass
 
 
@@ -337,7 +337,11 @@ class QXBlochWaveCalculation(QXCalculation):
     :param tilt_range: min, max, step of tilt-range
     :param voltage: Acceleration voltage (kV)
     """
-    def __init__(self, crystal: SuperCell, beamlist: BeamList, q_dir_hkl: Tuple[int, int, int], tilt_range: Tuple[float, float, float], voltage: float):
+    def __init__(self, crystal: SuperCell, beamlist: BeamList, q_dir_hkl: Tuple[int, int, int],
+                 tilt_range: Tuple[float, float, float], voltage: float, wavevector: ArrayLike,
+                 foilnormal: Optional[ArrayLike] = None, formfactor_db=None):
+        from pyctem.sim import BlochWaveCalculation, calc_structure_matrix
+
         self.crystal = crystal
         self._beamlist = beamlist
         self._q_dir_hkl = q_dir_hkl
@@ -345,51 +349,78 @@ class QXBlochWaveCalculation(QXCalculation):
         self._tilt_samples = create_samples_from_range(*tilt_range)
         self.voltage = voltage
 
-        self._shape = (len(beamlist), len(self._tilt_samples), 1)
+        self._shape = (len(beamlist), 2, len(self._tilt_samples))
         self._axes = (BeamIndexAxis(beamlist, name="beam"),
-                      SampledAxis(name="tilt", unit="1/nm", samples=self._tilt_samples),
-                      LinearAxis(name="x", context="POSITION", unit="nm", scale=1.0, offset=0.0))
+                      LinearAxis(name="x", context="POSITION", unit="nm", scale=1.0, offset=0.0),
+                      SampledAxis(name="tilt", unit="1/nm", samples=self._tilt_samples).to_linear())
 
-        self._other_axes = Axis(name="thickness", unit="nm"),
+        self._other_axes = LinearAxis(name="thickness", unit="nm"),
         self._other_shape = None,
+        self._other_names = "thickness(nm)",
 
-        @property
-        def metadata(self) -> CoreMetaData:
-            return self._metadata
+        wavevector = np.array(wavevector)
+        if foilnormal is None:
+            foilnormal = -wavevector
+        foilnormal = np.array(foilnormal)
+        tilt_dir = crystal.coord.map_rcpr_to_cartesian(q_dir_hkl)
+        tilt_dir /= np.sqrt(np.sum(tilt_dir ** 2))
+        potential = calc_structure_matrix(crystal, beamlist, formfactor_db=formfactor_db, voltage=voltage)
+        initial = np.zeros(len(beamlist), dtype=complex)
+        initial[beamlist.index_hkl([0, 0, 0])] = 1.0
 
-        @property
-        def beamlist(self) -> BeamList:
-            return self._beamlist
+        self._bw = []
+        self._exc = []
+        for tilt in self._tilt_samples:
+            simulator = BlochWaveCalculation(beamlist, potential, wavevector + tilt * q_dir_hkl, foilnormal, voltage)
+            simulator.calculate()
+            self._bw.append(simulator)
+            self._exc.append(simulator.get_excitations(initial))
 
-        @property
-        def shape(self) -> Tuple[Optional[int], ...]:
-            """Shape of the output"""
-            return self._shape
+    @property
+    def metadata(self) -> CoreMetaData:
+        return self._metadata
 
-        @property
-        def axes(self) -> Tuple[Axis, ...]:
-            """Axes of the output"""
-            return self._axes
+    @property
+    def beamlist(self) -> BeamList:
+        return self._beamlist
 
-        @property
-        def q_dir_hkl(self) -> Tuple[int, int, int]:
-            """(HKL) of q-direction"""
-            return self._q_dir_hkl
+    @property
+    def shape(self) -> Tuple[Optional[int], ...]:
+        """Shape of the output"""
+        return self._shape
 
-        @abstractmethod
-        def other_axes(self) -> Tuple[Axis, ...]:
-            """Tuple with other Axis"""
-            return self._other_axes
+    @property
+    def axes(self) -> Tuple[Axis, ...]:
+        """Axes of the output"""
+        return self._axes
 
-        @abstractmethod
-        def other_shape(self) -> Tuple[Optional[int], ...]:
-            """Tuple with dimension of other indices"""
-            return self._other_shape
+    @property
+    def q_dir_hkl(self) -> Tuple[int, int, int]:
+        """(HKL) of q-direction"""
+        return self._q_dir_hkl
 
-        @abstractmethod
-        def other_names(self) -> Tuple[str, ...]:
-            """Names of other axes"""
-            return tuple(axis.name for axis in self._other_axes)
+    def other_axes(self) -> Tuple[Axis, ...]:
+        """Tuple with other Axis"""
+        return self._other_axes
+
+    def other_shape(self) -> Tuple[Optional[int], ...]:
+        """Tuple with dimension of other indices"""
+        return self._other_shape
+
+    def other_names(self) -> Tuple[str, ...]:
+        """Names of other axes"""
+        return self._other_names
+
+    def __call__(self, other: Optional[Mapping[str, int]] = None) -> DataSet:
+        """Return DataSet with (index, tilt, x) dimensions for given values of other_axes."""
+        out = np.empty(self._shape, dtype=complex)
+
+        thickness = other['thickness(nm)']
+        for n in range(len(self._tilt_samples)):
+            out[:, :, n] = self._bw[n].get_amplitudes(self._exc[n], thickness)[:, np.newaxis]
+        metadata = CoreMetaData()
+        metadata["parameter"] = other
+        return DataSet(data=out, axes=self._axes, metadata=metadata)
 
 
 def import_crystal(name: str, base_dir: Optional[Path] = None) -> SuperCell:
@@ -399,8 +430,9 @@ def import_crystal(name: str, base_dir: Optional[Path] = None) -> SuperCell:
     load_cif = getattr(pyctem.iolib, 'load_cif', None)
 
     filename, dataset = name.split('?', 1)
-    file = base_dir / Path(filename)
+    file = base_dir / Path(filename).expanduser()
 
+    crystal = None
     if file.is_file():
         if file.suffix == '.tdf':
             with TemDataFile(file, "r") as tdf_file:
@@ -424,8 +456,9 @@ def import_crystal(name: str, base_dir: Optional[Path] = None) -> SuperCell:
     return crystal
 
 
-def create_bloch_wave_calculation(param: Dict[str, Any], voltage: float, verbose: int = 0):
-    from pyctem.sim import get_formfactor_database
+def create_bloch_wave_calculation(param: Dict[str, Any], voltage: float, verbose: int = 0,
+                                  base_dir: Optional[Path] = None):
+    from pyctem.data import get_formfactor_database
     from pyctem import create_beamlist
 
     voltage = float(voltage)
@@ -481,7 +514,8 @@ def create_bloch_wave_calculation(param: Dict[str, Any], voltage: float, verbose
         print(f"\tWavevector (1/nm):    {wavevector}")
         print(f"\tBeam direction:       {wavevector / np.sqrt(np.sum(wavevector ** 2))}")
 
-    return QXBlochWaveCalculation(crystal, beamlist, q_dir_hkl=tilt_dir_hkl, tilt_range=tilt_range, voltage=voltage)
+    return QXBlochWaveCalculation(crystal, beamlist, q_dir_hkl=tilt_dir_hkl, tilt_range=tilt_range, voltage=voltage,
+                                  wavevector=wavevector, foilnormal=foilnormal, formfactor_db=formfactor_db)
 
 
 class QXCalculationSelector(QXCalculation):
@@ -720,10 +754,10 @@ class MatchQXPipeline:
     :param voltage: Acceleration voltage (kV), taken from experimental if omitted
     :param weights: Weights for loss function, axes (x-axis, q-axis)
     """
-    def __init__(self, experimental: DataSet, calculation: QXCalculation,
+    def __init__(self, experimental: DataSet, calculation: QXCalculation, voltage: float,
                  background: Optional[ArrayLike] = None,
                  x_axis: Optional[LinearAxis] = None, q_axis: Optional[LinearAxis] = None,
-                 q_margin: int = 3, mtf: Optional[Tuple] = None, voltage: Optional[float] = None,
+                 q_margin: int = 3, mtf: Optional[Tuple] = None,
                  weights: Optional[ArrayLike] = None):
         if experimental.ndim != 2:
             raise ValueError("Expected *experimental* to be two dimensional")
@@ -735,7 +769,7 @@ class MatchQXPipeline:
         self._mtf_param = mtf
 
         self.calculation = calculation
-        self.voltage = experimental.metadata["instrument"]["acceleration_voltage(kV)"] if voltage is None else float(voltage)
+        self.voltage = voltage
         if background is not None:
             self.background = np.array(background, dtype=float)
             self.experimental = DataSet(data=self.experimental.get() - self.background, axes=self.experimental.axes, metadata=self.experimental.metadata)
@@ -1313,13 +1347,16 @@ def create_sub_sample_axes(calculation: QXCalculation, key: str, min_max_step: O
     else:
         full_samples = axis.range(dim)
         if min_max_step is None:
-            min_max_step = None, None, 1
+            min_max_step = None, None, None
         amin = min_max_step[0] if min_max_step[0] is not None else np.amin(full_samples)
         amax = min_max_step[1] if min_max_step[1] is not None else np.amax(full_samples)
-        step = min_max_step[2] if len(min_max_step) > 2 and min_max_step[2] else 1
-        imin = np.argmin(abs(amin - full_samples))
-        imax = np.argmin(abs(amax - full_samples))
-        samples = full_samples[imin:imax:step]
+        if len(min_max_step) > 2 and min_max_step[2]:
+            step = min_max_step[2]
+        else:
+            step = np.mean(np.diff(full_samples))
+        asamples = create_samples_from_range(amin, amax, step)
+        isamples = np.argmin(abs(asamples[:, np.newaxis] - full_samples), axis=1)
+        samples = full_samples[np.unique(isamples)]
     return SampledAxis(name=name, unit=unit, samples=samples)
 
 
@@ -1625,13 +1662,13 @@ def find_minima(loss: BaseDataSet, border_margin: float = 0.0, kth=None):
     return all_minima[all_minima_order], all_minima_value[all_minima_order]
 
 
-def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, initial_param: Dict[str, float],
+def main(filename: str, experimental: DataSet, calculation: QXCalculation, initial_param: Dict[str, float],
          brute_force_parameters: Mapping[str, ParameterRange],
          interactive: bool = True,
          constrain_depth_thickness: bool = True,
          expunge_cached_brute_force: bool = True,
          experimental_rescale_x: float = 1.0, subtract_background: bool = False,
-         nodes: int = 1, verbose: int = 1, lazy_calculation: bool = True,
+         nodes: int = 1, verbose: int = 1,
          optimized_parameters: Optional[Iterable[str]] = None,
          relative_losses: Optional[str] = None,
          mtf: Optional[Tuple] = None, save_final: bool = True, voltage: Optional[float] = None,
@@ -1645,13 +1682,6 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     dpi = float(dpi) if dpi is not None else rc_params["figure.dpi"]
     width = float(width) if width is not None else rc_params["figure.figsize"][0] * dpi
     height = float(height) if height is not None else rc_params["figure.figsize"][1] * dpi
-
-    if 1:
-        calc_file = TemDataFile(calculation_path, "r")
-        amplitudes = calc_file.read("amplitudes", lazy=lazy_calculation)
-        beamlist = calc_file.read(amplitudes.metadata["beamlist_uuid"])
-        calculation = QXCalculationSelector(amplitudes, beamlist)
-    #beamlist = calc_file.read(calculation.metadata["beamlist_uuid"])
 
     if subtract_background:
         q_range = experimental.axis_range(1) + initial_param.get("q_shift(1/nm)", 0.0)
@@ -1667,8 +1697,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
     else:
         background = None
 
-    pipeline = MatchQXPipeline(experimental, calculation, background=background,
-                               mtf=mtf, voltage=voltage)
+    pipeline = MatchQXPipeline(experimental, calculation, voltage, background=background, mtf=mtf)
     if optimized_parameters:
         optimized_parameters = tuple(optimized_parameters)
     else:
@@ -1716,6 +1745,7 @@ def main(filename: str, experimental: DataSet, calculation_path: os.PathLike, in
             except:
                 if pool:
                     pool.close()
+                raise
 
             elapsed = time.monotonic() - start
 
@@ -1936,7 +1966,9 @@ class ParsedParameters:
     voltage: Optional[float]
     brute_force_labels: Optional[Iterable[str]]
 
-    def __init__(self, param: Dict, enable_brute_force: Optional[bool] = None):
+    def __init__(self, param: Dict, enable_brute_force: Optional[bool] = None, base_dir: Optional[Path] = None, verbose: int = 0):
+        base_dir = Path.cwd() if base_dir is None else Path(base_dir)
+
         if "brute_force_parameters" in param:
             # New interface
             self.brute_force_parameters = param["brute_force_parameters"]
@@ -1951,7 +1983,7 @@ class ParsedParameters:
         if (enable_brute_force is not None) and not enable_brute_force:
             self.brute_force_parameters = {}
 
-        experimental_path = Path(os.path.expandvars(param['experimental'])).expanduser()
+        experimental_path = base_dir / Path(param['experimental']).expanduser()
         experimental_name = param.get('experimental_name')
         with TemDataFile(experimental_path, "r") as experimental_file:
             uuids = experimental_file.uuids(cls=TemDataFile.CLASS_DATASET)
@@ -2011,12 +2043,28 @@ class ParsedParameters:
         self.experimental.metadata["rescaled_x"] = self.experimental_rescale_x
         self.experimental.metadata["margin_x"] = margin_x
 
-        self.calculation_path = Path(os.path.expandvars(param['calculation'])).expanduser()
+        self.voltage = param.get('acceleration_voltage(kV)')
+        self.voltage = self.experimental.metadata["instrument"]["acceleration_voltage(kV)"] if self.voltage is None else float(self.voltage)
+
+        if 'calculation' in param:
+            if 'bloch_waves' in param:
+                raise ValueError("The parameters 'calculation' and 'bloch_waves' are mutually exclusive.")
+
+            calc_file = TemDataFile(base_dir / Path(param['calculation']).expanduser(), "r")
+            amplitudes = calc_file.read("amplitudes", lazy=True)
+            beamlist = calc_file.read(amplitudes.metadata["beamlist_uuid"])
+            self.calculation = QXCalculationSelector(amplitudes, beamlist)
+        elif 'bloch_waves' in param:
+            bloch_waves_param = param["bloch_waves"]
+            self.calculation = create_bloch_wave_calculation(bloch_waves_param, self.voltage, base_dir=base_dir, verbose=verbose)
+        else:
+            raise ValueError("Either the parameter 'calculation' or 'bloch_waves' must be given.")
+
         self.subtract_background = param.get('subtract_background', False)
         self.optimized_parameters = param.get('optimized_parameters')
         self.constrain_depth_thickness = param.get('constrain_depth_thickness', True)
         self.mtf = param.get('mtf')
-        self.voltage = param.get('acceleration_voltage(kV)')
+
         self.brute_force_labels = param.get('brute_force_labels')
 
 
@@ -2055,8 +2103,8 @@ if __name__ == '__main__':
         param_source = file.read()
     param = decode_json(param_source, allow_comments=True, allow_trailing_commas=True)
 
-    pp = ParsedParameters(param, enable_brute_force=args.brute)
-    main(param_file.stem, pp.experimental, pp.calculation_path, initial_param=pp.initial_param,
+    pp = ParsedParameters(param, enable_brute_force=args.brute, base_dir=param_file.parent, verbose=args.verbose)
+    main(param_file.stem, pp.experimental, pp.calculation, initial_param=pp.initial_param,
          interactive=args.interactive, verbose=args.verbose, nodes=args.nodes,
          subtract_background=pp.subtract_background,
          optimized_parameters=pp.optimized_parameters,

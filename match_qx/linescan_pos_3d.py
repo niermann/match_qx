@@ -7,8 +7,7 @@ from pyctem.hl import (show_4d_stem, LinearAxis, DataSet, CoreMetaData, show_pos
                        apply_4d_stem, SumDetector, CenterOfMassDetector)
 from pyctem.proc import line_scan
 from pyctem.utils import decode_json
-from pyctem import TemMeasurementMetaData
-from tem import TemInstrumentMetaData, CameraDetectorMetaData
+from pyctem import TemMeasurementMetaData, TemInstrumentMetaData, CameraDetectorMetaData
 
 COPYRIGHT = """
 Copyright (c) 2024 Tore Niermann
@@ -253,6 +252,10 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
             del hdf5_data
             hdf5_file.close()
             del hdf5_file
+    elif merlin_path.suffix in ['.dm4', '.dm3']:
+        assert data is None
+        from pyctem.iolib import load_dm
+        data = load_dm(merlin_path, memmap=True)
     else:
         raise ValueError("Not a supported 4DSTEM data file format")
 
