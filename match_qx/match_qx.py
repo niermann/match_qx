@@ -1194,7 +1194,8 @@ class MatchQXPlot:
         layouter.add_slider("q_blur(1/nm)", 0.0, +0.5, self.param["q_blur(1/nm)"], on_changed=changed)
         layouter.add_slider("semi_conv(1/nm)", self.experimental.axes[1].scale * 2.0, 3.0,
                             valinit=self.param["semi_conv(1/nm)"], on_changed=changed)
-        layouter.add_slider("tilt(1/nm)", -3.0, +3.0, valinit=self.param["tilt(1/nm)"], on_changed=changed)
+        layouter.add_slider("tilt(1/nm)", self.param["tilt(1/nm)"] - 3.0, self.param["tilt(1/nm)"] + 3.0,
+                            valinit=self.param["tilt(1/nm)"], on_changed=changed)
         layouter.add_slider("defocus(nm)", -500.0, +500.0, valinit=self.param["defocus(nm)"], on_changed=changed)
         layouter.add_slider("curvature(1/nm2)", -0.05, +0.05, valinit=self.param["curvature(1/nm2)"], on_changed=changed)
 
