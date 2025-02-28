@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
+import time
 import numpy as np
 from pathlib import Path
 
-from pyctem.iolib import load_dm, TemDataFile
-from pyctem.hl import LinearAxis, DataSet, CoreMetaData, show_position_stem
-from pyctem import TemMeasurementMetaData, TemInstrumentMetaData, CameraDetectorMetaData
+from pyctem.iolib import TemDataFile
+from pyctem.iolib.dm import parse_image_header, DigitalMicrographFile
+from pyctem.hl import LinearAxis, DataSet, CoreMetaData
+from pyctem import TemInstrumentMetaData, CameraDetectorMetaData
+from pyctem.utils import print_progress
 
 COPYRIGHT = """
 Copyright (c) 2024 Tore Niermann
@@ -20,83 +23,93 @@ the Free Software Foundation, either version 3 of the License, or
 LINESCAN3D_VERSION = 4.0
 
 
-def main(path, show_result=False, dryrun=False, dtype=None):
+def main(path, dtype=None, var=False):
     metadata = CoreMetaData()
-    instrument_metadata = None
-    data = None
-    image = None
 
-    data = load_dm(path, memmap=True)
-    image_scale = getattr(data.axes[0], "scale", 1.0)
-    image_unit = getattr(data.axes[0], "unit", "px")
+    with DigitalMicrographFile(path, 'r', memmap=True) as tags:
+        dm_image = tags['ImageList'][1]
+        dm_image_data = dm_image['ImageData']
 
-    metadata['source'] = data.metadata.ref()
-    metadata['instrument'] = TemInstrumentMetaData(getattr(data.metadata, "instrument", None))
-    metadata['detector'] = CameraDetectorMetaData(getattr(data.metadata, "detector", None))
+        header = parse_image_header(dm_image)
 
-    data_view = data.get(copy=False)
+        # Read image
+        # Bitcasting by use of view is needed for complex types, which are returned by as_array as 2 float records.
+        image_array = dm_image_data['Data']
+        dm_dtype = np.dtype(image_array.byteorder + header.dtype)
+        data = image_array.as_array(copy=False).view(dm_dtype).reshape(header.shape)
 
-    image = DataSet(data=np.sum(data_view, axis=(-2, -1), dtype=np.float32),
-                    axes=data.axes[0:2], metadata=metadata.copy())
+        image_scale = getattr(header.axes[0], "scale", 1.0)
+        image_unit = getattr(header.axes[0], "unit", "px")
 
-    pos0 = np.array((data.shape[1] * 0.5, 0), dtype=float)
-    pos1 = np.array((data.shape[1] * 0.5, data.shape[0]), dtype=float)
-    posw = data.shape[1] + 0.001
-    binsize = 1.0
+        metadata['source'] = header.metadata.ref()
+        metadata['instrument'] = TemInstrumentMetaData(getattr(header.metadata, "instrument", None))
+        metadata['detector'] = CameraDetectorMetaData(getattr(header.metadata, "detector", None))
 
-    print("Creating linescan:")
-    print(f'\t"pos0": [{pos0[0]:.1f}, {pos0[1]:.1f}],')
-    print(f'\t"pos1": [{pos1[0]:.1f}, {pos1[1]:.1f}],')
-    print(f'\t"posw": {posw:.1f},')
-    print(f'\t"pos_binsize": {binsize:.1f},')
+        chunk_size = (16 << 20) // header.shape[-1] // header.shape[-2] // header.shape[-3]
 
-    scan_axes = (
-        LinearAxis(name='x', context='POSITION', unit=image_unit, scale=binsize * image_scale),
-        data.axes[-2],
-        data.axes[-1]
-    )
+        pos0 = np.array((data.shape[1] * 0.5, 0), dtype=float)
+        pos1 = np.array((data.shape[1] * 0.5, data.shape[0]), dtype=float)
+        posw = data.shape[1] + 0.001
+        binsize = 1.0
 
-    metadata['linescan3d_version'] = LINESCAN3D_VERSION
-    metadata['pos0'] = pos0
-    metadata['pos1'] = pos1
-    metadata['posw'] = posw
-    metadata['pos_binsize'] = binsize
-    metadata['pos_scale'] = image_scale
-    metadata['pos_unit'] = image_unit
+        print("Creating linescan:")
+        print(f'\t"pos0": [{pos0[0]:.1f}, {pos0[1]:.1f}],')
+        print(f'\t"pos1": [{pos1[0]:.1f}, {pos1[1]:.1f}],')
+        print(f'\t"posw": {posw:.1f},')
+        print(f'\t"pos_binsize": {binsize:.1f},')
 
-    if dtype is None:
-        dtype = np.float32
-    pos_mean = DataSet(data=np.mean(data_view, axis=1, dtype=dtype), axes=scan_axes, metadata=metadata)
-    #pos_var = DataSet(data=np.var(data_view, axis=1, dtype=np.float32, ddof=1), axes=scan_axes, metadata=metadata)
-    #pos_count = DataSet(data=np.full(data_view.shape[0:1] + data_view.shape[2:], data.shape[1]), axes=scan_axes, metadata=metadata)
+        scan_axes = (
+            LinearAxis(name='x', context='POSITION', unit=image_unit, scale=binsize * image_scale),
+            header.axes[-2],
+            header.axes[-1]
+        )
 
-    if not dryrun:
+        metadata['linescan3d_version'] = LINESCAN3D_VERSION
+        metadata['pos0'] = pos0
+        metadata['pos1'] = pos1
+        metadata['posw'] = posw
+        metadata['pos_binsize'] = binsize
+        metadata['pos_scale'] = image_scale
+        metadata['pos_unit'] = image_unit
+
+        if dtype is None:
+            dtype = np.float32
+
         linescan_path = path.stem + ".squash_x.tdf"
         with TemDataFile(linescan_path, 'w') as outfile:
-            outfile.write_dataset(pos_mean, name="mean")
-            #outfile.write_dataset(pos_var, name="var")
-            #outfile.write_dataset(pos_count, name="count")
-            outfile.write_dataset(image, name="image")
+            outfile.write_dataset(DataSet(data=np.full(header.shape[0:1], header.shape[1]), axes=scan_axes[0:1], metadata=metadata.copy()), name="count")
 
-    del data_view
-    del data
+            image = outfile.create_empty_dataset(header.shape[0:2], dtype=np.float32, name="image", axes=header.axes[0:2], metadata=metadata.copy())
+            pos_mean = outfile.create_empty_dataset(header.shape[0:1] + header.shape[2:], dtype=dtype, name="mean", axes=scan_axes, metadata=metadata.copy())
+            if var:
+                pos_var = outfile.create_empty_dataset(header.shape[0:1] + header.shape[2:], dtype=np.float32, name="var", axes=scan_axes, metadata=metadata.copy())
 
-    if show_result:
-        pos_dir = (pos1 - pos0).astype(float)
-        pos_dir /= np.sqrt(np.sum(pos_dir ** 2))
-        pos = np.arange(pos_mean.shape[0], dtype=float)[..., np.newaxis] * binsize * pos_dir + pos0
-        show_position_stem(pos_mean, pos, image.get(), title=path.stem, vmin=1)
+            print("Squashing...")
+            y = 0
+            start = time.time()
+            while y < data.shape[0]:
+                y_end = min(data.shape[0], y + chunk_size)
+                print_progress(y, data.shape[0], elapsed=time.time() - start)
+                data_view = data[y:y_end]
+                image[y:y_end] = np.sum(data_view, axis=(-2, -1), dtype=np.float32)
+                pos_mean[y:y_end] = np.mean(data_view, axis=1, dtype=dtype)
+                if var:
+                    pos_var[y:y_end] = np.var(data_view, axis=1, dtype=np.float32, ddof=1)
+                y = y_end
+            print_progress(data.shape[0], data.shape[0], elapsed=time.time() - start, newline=True)
+
+        del data
+        del data_view
 
 
 if __name__ == '__main__':
     import argparse
 
-    parser = argparse.ArgumentParser(description="Create 3D linescan from 4D-STEM by average in x-direction", epilog=COPYRIGHT)
+    parser = argparse.ArgumentParser(description="Create 3D linescan from 4D-STEM by averaging a Digital Micrograph file in x-direction", epilog=COPYRIGHT)
     parser.add_argument('path')
-    parser.add_argument('-r', '--result', action='store_true', default=False, help="Show result")
-    parser.add_argument('-n', '--dry-run', dest="dryrun", action='store_true', default=False, help="Do not save result")
     parser.add_argument('-d', '--dtype', type=str, default=None, help="Datatype of average")
+    parser.add_argument('--no-var', action="store_false", dest='var', default=True, help="Don't calculate the variance")
     args = parser.parse_args()
 
     path = Path(args.path)
-    main(path, show_result=args.result, dryrun=args.dryrun, dtype=args.dtype)
+    main(path, dtype=args.dtype, var=args.var)
