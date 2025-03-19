@@ -324,20 +324,20 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
         data.axes[-1]
     )
 
+    metadata['linescan3d_version'] = LINESCAN3D_VERSION
+    metadata['pos0'] = pos0
+    metadata['pos1'] = pos1
+    metadata['posw'] = posw
+    metadata['pos_binsize'] = binsize
+    metadata['pos_scale'] = image_scale
+    metadata['pos_unit'] = image_unit
+
     pos_mean = DataSet(data=pos_scan[0], axes=scan_axes, metadata=metadata)
     pos_var = DataSet(data=pos_scan[1], axes=scan_axes, metadata=metadata)
     pos_count = DataSet(data=pos_scan[2], axes=scan_axes, metadata=metadata)
 
     if not dryrun:
         with TemDataFile(linescan_path, 'w') as outfile:
-            metadata['linescan3d_version'] = LINESCAN3D_VERSION
-            metadata['pos0'] = pos0
-            metadata['pos1'] = pos1
-            metadata['posw'] = posw
-            metadata['pos_binsize'] = binsize
-            metadata['pos_scale'] = image_scale
-            metadata['pos_unit'] = image_unit
-
             outfile.write_dataset(pos_mean, name="mean")
             outfile.write_dataset(pos_var, name="var")
             outfile.write_dataset(pos_count, name="count")
