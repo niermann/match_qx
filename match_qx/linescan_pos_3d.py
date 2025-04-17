@@ -192,8 +192,7 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
 
     if data is not None:
         data.axes = image_axes + diff_axes
-
-    if merlin_path.suffix == '.mib':
+    elif merlin_path.suffix == '.mib':
         assert data is None
         if image is not None:
             image_area_size = param.get("image_area_size", (image.shape[1], image.shape[0]))
