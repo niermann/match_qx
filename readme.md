@@ -12,12 +12,12 @@ plots with simulations. These tools were used in the following article:
 If you use these tools, please cite the above article. For further questions, please
 contact Tore Niermann (tore.niermann@tu-berlin.de).
 
-Requirements (older versions of the packages might also work, but are not tested):
+Requirements (other versions of the packages might also work, but are not tested):
 
 * Python >= 3.10
 * numpy >= 1.26
 * matplotlib >= 3.8
-* pyctem == 4.3
+* pyctem == 4.3.1
 
 
 Command line scripts

@@ -77,7 +77,7 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
         pos_dir = (pos1 - pos0)
         pos_dir /= np.sqrt(np.sum(pos_dir ** 2))
         pos = pos_mean.axis_range(0)[..., np.newaxis] * pos_dir + pos0 * image_scale
-        show_position_stem(pos_mean, pos, image, title=source_path.stem, vmin=1)
+        show_position_stem(pos_mean, pos, image, title=source_path.stem, vmin=1, diff_cmap=cmap)
     pos_mean_view = pos_mean.get(copy=False)
     diff_scale = np.sqrt(getattr(pos_mean.axes[1], "scale", 1.0) * getattr(pos_mean.axes[2], "scale", 1.0))
     diff_unit = getattr(pos_mean.axes[1], "unit", "px")
