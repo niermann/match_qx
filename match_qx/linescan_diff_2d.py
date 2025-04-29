@@ -50,7 +50,7 @@ LINESCAN2D_VERSION = 1.2
 
 
 def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result=False, log_diff=False, cmap="gray",
-         dryrun=False):
+         vmax=None, dryrun=False):
     source_path = Path(param["linescan3d_file"])
 
     with TemDataFile(source_path, 'r') as source:
@@ -77,7 +77,7 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
         pos_dir = (pos1 - pos0)
         pos_dir /= np.sqrt(np.sum(pos_dir ** 2))
         pos = pos_mean.axis_range(0)[..., np.newaxis] * pos_dir + pos0 * image_scale
-        show_position_stem(pos_mean, pos, image, title=source_path.stem, vmin=1, diff_cmap=cmap)
+        show_position_stem(pos_mean, pos, image, title=source_path.stem, vmin=1, diff_cmap=cmap, vmax=vmax)
     pos_mean_view = pos_mean.get(copy=False)
     diff_scale = np.sqrt(getattr(pos_mean.axes[1], "scale", 1.0) * getattr(pos_mean.axes[2], "scale", 1.0))
     diff_unit = getattr(pos_mean.axes[1], "unit", "px")
@@ -138,7 +138,7 @@ def main(param, param_file_stem, show_3d=False, show_linescan=False, show_result
     extent = [-0.5 * pos_scale + pos_offset, (diff_scan[0].shape[1] - 0.5) * pos_scale + pos_offset,
               (diff_scan[0].shape[0] - 0.5) * diff_scale + diff_offset, -0.5 * diff_scale + diff_offset]
     aspect = abs(extent[1] - extent[0]) / abs(extent[3] - extent[2])
-    ax.imshow(diff_scan[0], extent=extent, aspect=aspect)
+    ax.imshow(diff_scan[0], extent=extent, aspect=aspect, cmap=cmap, vmax=vmax)
     ax.set_xlabel(f"{scan_axes[1].name} ({getattr(scan_axes[1], 'unit', '')})")
     ax.set_ylabel(f"{scan_axes[0].name} ({getattr(scan_axes[0], 'unit', '')})")
     ax.set_title(output_path.stem)
@@ -160,6 +160,7 @@ if __name__ == '__main__':
     parser.add_argument('-l', '--linescan', action='store_true', default=False, help="Show linescan interactively")
     parser.add_argument('-r', '--result', action='store_true', default=False, help="Show result")
     parser.add_argument('-c', '--cmap', type=str, default="gray", help="Colormap")
+    parser.add_argument('--vmax', type=float, default=None, help="Max. intensity for diffraction patterns")
     parser.add_argument('--linear', action='store_true', default=False,
                         help="Show data linear instead of logarithmically")
     parser.add_argument('-n', '--dry-run', dest="dryrun", action='store_true', default=False, help="Do not save result")
@@ -170,4 +171,4 @@ if __name__ == '__main__':
         param_source = file.read()
     param = decode_json(param_source, allow_comments=True, allow_trailing_commas=True)
     main(param, param_file.stem, show_3d=args.show3d, show_linescan=args.linescan, show_result=args.result,
-         log_diff=not args.linear, cmap=args.cmap, dryrun=args.dryrun)
+         log_diff=not args.linear, cmap=args.cmap, vmax=args.vmax, dryrun=args.dryrun)
