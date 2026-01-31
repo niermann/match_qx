@@ -17,7 +17,7 @@ Requirements (other versions of the packages might also work, but are not tested
 * Python >= 3.10
 * numpy >= 1.26
 * matplotlib >= 3.8
-* pyctem == 4.3.1
+* pyctem >= 4.4.0
 
 
 Command line scripts

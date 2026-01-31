@@ -2,12 +2,13 @@
 import numpy as np
 from pathlib import Path
 
+from dask.array.svg import draw_sizes
 from pyctem.iolib import load_mib, load_tiff, TemDataFile, load_tdf, Hdf5DataSet
-from pyctem.hl import (show_4d_stem, LinearAxis, DataSet, CoreMetaData, show_position_stem,
+from pyctem.hl import (show_4d_stem, LinearAxis, DataSet, show_position_stem,
                        apply_4d_stem, SumDetector, CenterOfMassDetector)
 from pyctem.proc import line_scan
 from pyctem.utils import decode_json
-from pyctem import TemMeasurementMetaData, TemInstrumentMetaData, CameraDetectorMetaData
+from pyctem import TemMeasurementMetaData, TemInstrumentMetaData, CameraDetectorMetaData, CoreMetaData
 
 COPYRIGHT = """
 Copyright (c) 2024 Tore Niermann
@@ -301,14 +302,20 @@ def main(param, param_file_stem, show_4d=False, show_linescan=False, show_result
     if show_4d:
         show_4d_stem(data, image, title=merlin_path, vmin=1)
 
-    if show_linescan:
+    if show_linescan or not dryrun:
         # TODO: have some sensible import path (relative import?)
         from linescan_gui import DraggableLineScan
         drag_gui = DraggableLineScan(image.get(), pos0, pos1, posw, title=linescan_path.name)
+
+    if show_linescan:
         drag_gui.run()
+
         pos0 = drag_gui.pos[0]
         pos1 = drag_gui.pos[1]
         posw = drag_gui.width
+
+    if not dryrun:
+        drag_gui.fig.savefig(linescan_path.with_suffix(".svg"))
 
     print("Creating linescan:")
     print(f'\t"pos0": [{pos0[0]:.1f}, {pos0[1]:.1f}],')
